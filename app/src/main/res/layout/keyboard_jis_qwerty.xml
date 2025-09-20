@@ -99,7 +99,7 @@
             android:text="[" android:tag="symbol:[" />
     </LinearLayout>
 
-    <!-- Row 3: ASDF row with Enter at end -->
+    <!-- Row 3: Ctrl + ASDF row with Enter at end -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -107,11 +107,11 @@
         android:gravity="center_vertical">
 
         <Button
-            android:id="@+id/key_shift"
+            android:id="@+id/key_ctrl"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_weight="1.5"
-            android:text="Shift" />
+            android:text="Ctrl" />
 
         <Button android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
             android:text="a" android:tag="letter:a" />
@@ -146,14 +146,19 @@
             android:text="Enter" />
     </LinearLayout>
 
-    <!-- Row 4: ZXCV row with symbols -->
+    <!-- Row 4: Shift + ZXCV row with symbols -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <Space android:layout_width="24dp" android:layout_height="0dp" />
+        <Button
+            android:id="@+id/key_shift"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1.5"
+            android:text="Shift" />
 
         <Button android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
             android:text="z" android:tag="letter:z" />
@@ -189,7 +194,7 @@
             android:text="Shift" />
     </LinearLayout>
 
-    <!-- Row 5: Ctrl + Space bar row -->
+    <!-- Row 5: Space bar row + arrows on right -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -197,17 +202,10 @@
         android:gravity="center_vertical">
 
         <Button
-            android:id="@+id/key_ctrl"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1.2"
-            android:text="Ctrl" />
-
-        <Button
             android:id="@+id/key_space"
             android:layout_width="0dp"
             android:layout_height="48dp"
-            android:layout_weight="4"
+            android:layout_weight="4.2"
             android:text="Space" />
 
         <Button
