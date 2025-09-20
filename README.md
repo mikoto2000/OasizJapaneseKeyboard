@@ -1,0 +1,57 @@
+OasizJapaneseKeyboard
+=====================
+
+Android 向けの日本語フルキーボード（IME）を目指すプロジェクトです。現在は JIS 配列ベースのローマ字キーボードを実装し、最小限の入力操作が可能です。
+
+特長（現状）
+- JIS ローマ字配列のフルキーボード UI（XML レイアウト）
+- IME 登録・切替に対応（システム設定から有効化）
+- Shift トグル（ON/OFF 表示、英字の大/小と記号のシフトに対応）
+- Ctrl トグル（英字には `META_CTRL_ON` の KeyEvent を送出。対応アプリでショートカット動作）
+- キーリピート（長押しで連続入力。Ctrl/Shift 以外のキーに適用）
+
+注意
+- Ctrl 付き KeyEvent を受け取らないアプリもあります。
+- 記号のシフト結果は暫定マップです（JIS 厳密化は今後対応）。
+
+対応環境
+- minSdk 30 / targetSdk 36
+- Android Studio (Electric Eel 以降推奨)
+
+セットアップとビルド
+1. このリポジトリを Android Studio で開く
+2. 実機またはエミュレータを用意
+3. Run/Debug から `app` を起動
+
+コマンドライン（任意）
+```
+./gradlew assembleDebug
+```
+
+有効化と切替
+- 設定 → システム → 言語と入力 → 画面上のキーボード → キーボードの管理 → OasizJapaneseKeyboard をオン
+- エディタでフォーカスし、地球儀/キーボードアイコンから OasizJapaneseKeyboard を選択
+
+使い方（現状の挙動）
+- 文字入力: 英字は `commitText`、記号は Shift 状態に応じた文字を入力
+- Shift: クリックで ON/OFF。ラベルに「Shift / Shift ON」を表示
+- Ctrl: クリックで ON/OFF。ラベルに「Ctrl / Ctrl ON」を表示（英字に対し `META_CTRL_ON` を送出）
+- 長押しリピート: Ctrl/Shift 以外のキー（英字/記号/Space/Enter/Backspace）で有効
+
+主なファイル
+- IME サービス: `app/src/main/java/dev/mikoto2000/oasizjapanesekeyboard/ime/JapaneseKeyboardService.kt`
+- JIS 配列レイアウト: `app/src/main/res/layout/keyboard_jis_qwerty.xml`
+- IME 設定 XML: `app/src/main/res/xml/ime_config.xml`
+- マニフェスト: `app/src/main/AndroidManifest.xml`
+
+今後の予定
+- JIS 記号のシフトマップの厳密化 / 配列の微調整
+- かな配列（JISかな）やフリック入力 UI の追加
+- 候補バー、予測変換、辞書連携
+- 視覚スタイル（選択状態の色、角丸、サイズ調整）の改善
+
+ライセンス
+このプロジェクトは MIT License のもとで公開されています。詳細は `LICENSE` を参照してください。
+
+貢献
+Issue/PR 歓迎です。提案や改善点があればお気軽にお知らせください。
