@@ -9,6 +9,27 @@
     android:paddingBottom="4dp"
     android:background="#EFEFEF">
 
+    <!-- Row 0: Function keys F1..F12 (topmost) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <Button android:id="@+id/key_f1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F1" />
+        <Button android:id="@+id/key_f2" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F2" />
+        <Button android:id="@+id/key_f3" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F3" />
+        <Button android:id="@+id/key_f4" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F4" />
+        <Button android:id="@+id/key_f5" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F5" />
+        <Button android:id="@+id/key_f6" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F6" />
+        <Button android:id="@+id/key_f7" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F7" />
+        <Button android:id="@+id/key_f8" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F8" />
+        <Button android:id="@+id/key_f9" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F9" />
+        <Button android:id="@+id/key_f10" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F10" />
+        <Button android:id="@+id/key_f11" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F11" />
+        <Button android:id="@+id/key_f12" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="F12" />
+    </LinearLayout>
+
     <!-- Row 1: ESC + Numbers and symbols -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -58,6 +79,8 @@
             android:layout_weight="1.5"
             android:text="⌫" />
     </LinearLayout>
+
+    
 
     <!-- Row 2: TAB + QWERTY row -->
     <LinearLayout

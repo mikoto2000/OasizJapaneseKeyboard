@@ -122,6 +122,27 @@ class JapaneseKeyboardService : InputMethodService() {
             setRepeatableKey(v) { sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() }
         }
 
+        // Function keys F1..F12 (repeat enabled)
+        val fnMap = listOf(
+            R.id.key_f1 to KeyEvent.KEYCODE_F1,
+            R.id.key_f2 to KeyEvent.KEYCODE_F2,
+            R.id.key_f3 to KeyEvent.KEYCODE_F3,
+            R.id.key_f4 to KeyEvent.KEYCODE_F4,
+            R.id.key_f5 to KeyEvent.KEYCODE_F5,
+            R.id.key_f6 to KeyEvent.KEYCODE_F6,
+            R.id.key_f7 to KeyEvent.KEYCODE_F7,
+            R.id.key_f8 to KeyEvent.KEYCODE_F8,
+            R.id.key_f9 to KeyEvent.KEYCODE_F9,
+            R.id.key_f10 to KeyEvent.KEYCODE_F10,
+            R.id.key_f11 to KeyEvent.KEYCODE_F11,
+            R.id.key_f12 to KeyEvent.KEYCODE_F12,
+        )
+        for ((rid, code) in fnMap) {
+            root.findViewById<View>(rid)?.let { v ->
+                setRepeatableKey(v) { sendSimpleKey(code); consumeOneShotModifiers() }
+            }
+        }
+
         // Feedback toggle (left of space)
         root.findViewById<Button>(R.id.key_feedback_toggle)?.let { btn ->
             btn.setOnClickListener {
