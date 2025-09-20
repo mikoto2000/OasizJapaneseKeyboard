@@ -23,6 +23,7 @@ class JapaneseKeyboardService : InputMethodService() {
     private val repeatTasks = mutableMapOf<View, Runnable>()
     private val letterButtons = mutableListOf<Button>()
     private val symbolButtons = mutableListOf<Pair<Button, String>>()
+    private var fnVisible = true
 
     private val shiftSymbolMap: Map<String, String> = mapOf(
         // Number row
@@ -141,6 +142,18 @@ class JapaneseKeyboardService : InputMethodService() {
             root.findViewById<View>(rid)?.let { v ->
                 setRepeatableKey(v) { sendSimpleKey(code); consumeOneShotModifiers() }
             }
+        }
+
+        // Fn toggle (left of space): show/hide top function row
+        val fnRow = root.findViewById<View>(R.id.row_fn)
+        fnRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
+        root.findViewById<Button>(R.id.key_fn_toggle)?.let { btn ->
+            btn.setOnClickListener {
+                fnVisible = !fnVisible
+                fnRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
+                updateFnToggleUI(btn)
+            }
+            updateFnToggleUI(btn)
         }
 
         // Feedback toggle (left of space)
@@ -273,6 +286,11 @@ class JapaneseKeyboardService : InputMethodService() {
             val bg = if (feedbackEnabled) R.drawable.key_bg_feedback else R.drawable.key_bg_static
             view.setBackgroundResource(bg)
         }
+    }
+
+    private fun updateFnToggleUI(btn: Button) {
+        btn.text = if (fnVisible) "Fn ON" else "Fn OFF"
+        btn.isSelected = fnVisible
     }
 
     private fun consumeOneShotModifiers() {
