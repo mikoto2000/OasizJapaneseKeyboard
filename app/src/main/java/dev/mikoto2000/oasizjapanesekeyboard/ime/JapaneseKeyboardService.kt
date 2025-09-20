@@ -2,6 +2,7 @@ package dev.mikoto2000.oasizjapanesekeyboard.ime
 
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
+import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -9,6 +10,7 @@ import dev.mikoto2000.oasizjapanesekeyboard.R
 
 class JapaneseKeyboardService : InputMethodService() {
     private var shiftOn = false
+    private var ctrlOn = false
     private val letterButtons = mutableListOf<Button>()
     private val symbolButtons = mutableListOf<Pair<Button, String>>()
 
@@ -52,6 +54,10 @@ class JapaneseKeyboardService : InputMethodService() {
         root.findViewById<View>(R.id.key_enter)?.setOnClickListener { sendEnter() }
         root.findViewById<View>(R.id.key_space)?.setOnClickListener { commitText(" ") }
         root.findViewById<View>(R.id.key_shift)?.setOnClickListener { toggleShift(root) }
+        (root.findViewById<View>(R.id.key_ctrl) as? Button)?.let { btn ->
+            btn.setOnClickListener { toggleCtrl(btn) }
+            updateCtrlLabel(btn)
+        }
 
         return root
     }
@@ -74,7 +80,13 @@ class JapaneseKeyboardService : InputMethodService() {
                     view.text = if (shiftOn) base.uppercase() else base.lowercase()
                     view.setOnClickListener {
                         val text = if (shiftOn) base.uppercase() else base.lowercase()
-                        commitText(text)
+                        if (ctrlOn) {
+                            val code = letterToKeyCode(base)
+                            if (code != null) sendKeyWithMeta(code, KeyEvent.META_CTRL_ON)
+                            else commitText(text)
+                        } else {
+                            commitText(text)
+                        }
                     }
                 }
                 tag.startsWith("symbol:") -> {
@@ -85,6 +97,7 @@ class JapaneseKeyboardService : InputMethodService() {
                     view.text = label
                     view.setOnClickListener {
                         val out = if (shiftOn) shiftSymbolMap[base] ?: base else base
+                        // For symbols we keep commitText; Ctrl combos typically apply to letters.
                         commitText(out)
                     }
                 }
@@ -103,6 +116,55 @@ class JapaneseKeyboardService : InputMethodService() {
         // Update labels for symbol buttons
         for ((btn, base) in symbolButtons) {
             btn.text = if (shiftOn) shiftSymbolMap[base] ?: base else base
+        }
+    }
+
+    private fun toggleCtrl(btn: Button) {
+        ctrlOn = !ctrlOn
+        updateCtrlLabel(btn)
+    }
+
+    private fun updateCtrlLabel(btn: Button) {
+        btn.text = if (ctrlOn) "Ctrl ON" else "Ctrl"
+        btn.isSelected = ctrlOn
+    }
+
+    private fun sendKeyWithMeta(keyCode: Int, meta: Int) {
+        val now = SystemClock.uptimeMillis()
+        val ic = currentInputConnection ?: return
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, meta))
+    }
+
+    private fun letterToKeyCode(letter: String): Int? {
+        return when (letter.lowercase()) {
+            "a" -> KeyEvent.KEYCODE_A
+            "b" -> KeyEvent.KEYCODE_B
+            "c" -> KeyEvent.KEYCODE_C
+            "d" -> KeyEvent.KEYCODE_D
+            "e" -> KeyEvent.KEYCODE_E
+            "f" -> KeyEvent.KEYCODE_F
+            "g" -> KeyEvent.KEYCODE_G
+            "h" -> KeyEvent.KEYCODE_H
+            "i" -> KeyEvent.KEYCODE_I
+            "j" -> KeyEvent.KEYCODE_J
+            "k" -> KeyEvent.KEYCODE_K
+            "l" -> KeyEvent.KEYCODE_L
+            "m" -> KeyEvent.KEYCODE_M
+            "n" -> KeyEvent.KEYCODE_N
+            "o" -> KeyEvent.KEYCODE_O
+            "p" -> KeyEvent.KEYCODE_P
+            "q" -> KeyEvent.KEYCODE_Q
+            "r" -> KeyEvent.KEYCODE_R
+            "s" -> KeyEvent.KEYCODE_S
+            "t" -> KeyEvent.KEYCODE_T
+            "u" -> KeyEvent.KEYCODE_U
+            "v" -> KeyEvent.KEYCODE_V
+            "w" -> KeyEvent.KEYCODE_W
+            "x" -> KeyEvent.KEYCODE_X
+            "y" -> KeyEvent.KEYCODE_Y
+            "z" -> KeyEvent.KEYCODE_Z
+            else -> null
         }
     }
 
