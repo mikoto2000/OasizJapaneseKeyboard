@@ -10,6 +10,36 @@ import dev.mikoto2000.oasizjapanesekeyboard.R
 class JapaneseKeyboardService : InputMethodService() {
     private var shiftOn = false
     private val letterButtons = mutableListOf<Button>()
+    private val symbolButtons = mutableListOf<Pair<Button, String>>()
+
+    private val shiftSymbolMap: Map<String, String> = mapOf(
+        // Number row
+        "1" to "!",
+        "2" to "\"",
+        "3" to "#",
+        "4" to "$",
+        "5" to "%",
+        "6" to "&",
+        "7" to "'",
+        "8" to "(",
+        "9" to ")",
+        "0" to ")",
+        "-" to "=",
+        "^" to "~",
+        "¥" to "|",
+        // Right side of Q row
+        "@" to "`",
+        "[" to "{",
+        // Home row right side
+        ";" to "+",
+        ":" to "*",
+        "]" to "}",
+        // Bottom row
+        "," to "<",
+        "." to ">",
+        "/" to "?",
+        "\\" to "_"
+    )
 
     override fun onCreateInputView(): View {
         val root = layoutInflater.inflate(R.layout.keyboard_jis_qwerty, null)
@@ -48,8 +78,15 @@ class JapaneseKeyboardService : InputMethodService() {
                     }
                 }
                 tag.startsWith("symbol:") -> {
-                    val sym = tag.removePrefix("symbol:")
-                    view.setOnClickListener { commitText(sym) }
+                    val base = tag.removePrefix("symbol:")
+                    symbolButtons.add(view to base)
+                    // Initial label reflects current shift state
+                    val label = if (shiftOn) shiftSymbolMap[base] ?: base else base
+                    view.text = label
+                    view.setOnClickListener {
+                        val out = if (shiftOn) shiftSymbolMap[base] ?: base else base
+                        commitText(out)
+                    }
                 }
             }
         }
@@ -62,6 +99,10 @@ class JapaneseKeyboardService : InputMethodService() {
             val tag = btn.tag as? String ?: continue
             val base = tag.removePrefix("letter:")
             btn.text = if (shiftOn) base.uppercase() else base.lowercase()
+        }
+        // Update labels for symbol buttons
+        for ((btn, base) in symbolButtons) {
+            btn.text = if (shiftOn) shiftSymbolMap[base] ?: base else base
         }
     }
 
