@@ -17,6 +17,8 @@ class JapaneseKeyboardService : InputMethodService() {
     private var shiftBtn: Button? = null
     private var shiftBtnRight: Button? = null
     private var ctrlBtn: Button? = null
+    private var rootViewRef: View? = null
+    private var feedbackEnabled = true
     private val repeatHandler = Handler(Looper.getMainLooper())
     private val repeatTasks = mutableMapOf<View, Runnable>()
     private val letterButtons = mutableListOf<Button>()
@@ -53,6 +55,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
     override fun onCreateInputView(): View {
         val root = layoutInflater.inflate(R.layout.keyboard_jis_qwerty, null)
+        rootViewRef = root
 
         // Wire generic keys by tag
         wireKeysRecursively(root)
@@ -118,6 +121,19 @@ class JapaneseKeyboardService : InputMethodService() {
         root.findViewById<View>(R.id.key_tab)?.let { v ->
             setRepeatableKey(v) { sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() }
         }
+
+        // Feedback toggle (left of space)
+        root.findViewById<Button>(R.id.key_feedback_toggle)?.let { btn ->
+            btn.setOnClickListener {
+                feedbackEnabled = !feedbackEnabled
+                updateFeedbackToggleUI(btn)
+                applyKeyBackgrounds()
+            }
+            updateFeedbackToggleUI(btn)
+        }
+
+        // Apply initial backgrounds to all keys
+        applyKeyBackgrounds()
 
         return root
     }
@@ -215,6 +231,29 @@ class JapaneseKeyboardService : InputMethodService() {
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0))
     }
 
+    private fun updateFeedbackToggleUI(btn: Button) {
+        btn.text = if (feedbackEnabled) "FX ON" else "FX OFF"
+        btn.isSelected = feedbackEnabled
+    }
+
+    private fun applyKeyBackgrounds() {
+        val root = rootViewRef as? ViewGroup ?: return
+        applyKeyBackgroundsRec(root)
+    }
+
+    private fun applyKeyBackgroundsRec(view: View) {
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                applyKeyBackgroundsRec(view.getChildAt(i))
+            }
+            return
+        }
+        if (view is Button) {
+            val bg = if (feedbackEnabled) R.drawable.key_bg_feedback else R.drawable.key_bg_static
+            view.setBackgroundResource(bg)
+        }
+    }
+
     private fun consumeOneShotModifiers() {
         var changed = false
         if (shiftOn) { shiftOn = false; changed = true }
@@ -234,6 +273,7 @@ class JapaneseKeyboardService : InputMethodService() {
         view.setOnTouchListener { v, ev ->
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    v.isPressed = true
                     // Fire immediately
                     action()
                     // Schedule repeats
@@ -248,6 +288,7 @@ class JapaneseKeyboardService : InputMethodService() {
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
+                    v.isPressed = false
                     repeatTasks.remove(v)?.let { repeatHandler.removeCallbacks(it) }
                     true
                 }
