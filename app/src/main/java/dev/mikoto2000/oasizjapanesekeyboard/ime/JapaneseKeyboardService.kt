@@ -3,6 +3,9 @@ package dev.mikoto2000.oasizjapanesekeyboard.ime
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
 import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -13,6 +16,8 @@ class JapaneseKeyboardService : InputMethodService() {
     private var ctrlOn = false
     private var shiftBtn: Button? = null
     private var ctrlBtn: Button? = null
+    private val repeatHandler = Handler(Looper.getMainLooper())
+    private val repeatTasks = mutableMapOf<View, Runnable>()
     private val letterButtons = mutableListOf<Button>()
     private val symbolButtons = mutableListOf<Pair<Button, String>>()
 
@@ -51,10 +56,16 @@ class JapaneseKeyboardService : InputMethodService() {
         // Wire generic keys by tag
         wireKeysRecursively(root)
 
-        // Special keys
-        root.findViewById<View>(R.id.key_backspace)?.setOnClickListener { deleteText() }
-        root.findViewById<View>(R.id.key_enter)?.setOnClickListener { sendEnter() }
-        root.findViewById<View>(R.id.key_space)?.setOnClickListener { commitText(" ") }
+        // Special keys (repeat enabled)
+        root.findViewById<View>(R.id.key_backspace)?.let { v ->
+            setRepeatableKey(v, initialDelay = 350L, repeatInterval = 60L) { deleteText() }
+        }
+        root.findViewById<View>(R.id.key_enter)?.let { v ->
+            setRepeatableKey(v) { sendEnter() }
+        }
+        root.findViewById<View>(R.id.key_space)?.let { v ->
+            setRepeatableKey(v) { commitText(" ") }
+        }
 
         shiftBtn = root.findViewById<Button>(R.id.key_shift)
         shiftBtn?.setOnClickListener {
@@ -89,7 +100,7 @@ class JapaneseKeyboardService : InputMethodService() {
                     letterButtons.add(view)
                     // Initial label based on shift state
                     view.text = if (shiftOn) base.uppercase() else base.lowercase()
-                    view.setOnClickListener {
+                    setRepeatableKey(view) {
                         val text = if (shiftOn) base.uppercase() else base.lowercase()
                         if (ctrlOn) {
                             val code = letterToKeyCode(base)
@@ -105,9 +116,8 @@ class JapaneseKeyboardService : InputMethodService() {
                     // Initial label reflects current shift state
                     val label = if (shiftOn) shiftSymbolMap[base] ?: base else base
                     view.text = label
-                    view.setOnClickListener {
+                    setRepeatableKey(view) {
                         val out = if (shiftOn) shiftSymbolMap[base] ?: base else base
-                        // For symbols we keep commitText; Ctrl combos typically apply to letters.
                         commitText(out)
                     }
                 }
@@ -144,6 +154,37 @@ class JapaneseKeyboardService : InputMethodService() {
         val ic = currentInputConnection ?: return
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta))
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, meta))
+    }
+
+    private fun setRepeatableKey(
+        view: View,
+        initialDelay: Long = 400L,
+        repeatInterval: Long = 70L,
+        action: () -> Unit
+    ) {
+        view.setOnTouchListener { v, ev ->
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    // Fire immediately
+                    action()
+                    // Schedule repeats
+                    val task = object : Runnable {
+                        override fun run() {
+                            action()
+                            repeatHandler.postDelayed(this, repeatInterval)
+                        }
+                    }
+                    repeatTasks[v] = task
+                    repeatHandler.postDelayed(task, initialDelay)
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
+                    repeatTasks.remove(v)?.let { repeatHandler.removeCallbacks(it) }
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     // One-shot and lock behavior removed; simple toggle with click.
