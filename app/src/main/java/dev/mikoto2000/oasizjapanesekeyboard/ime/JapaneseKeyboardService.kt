@@ -11,6 +11,8 @@ import dev.mikoto2000.oasizjapanesekeyboard.R
 class JapaneseKeyboardService : InputMethodService() {
     private var shiftOn = false
     private var ctrlOn = false
+    private var shiftBtn: Button? = null
+    private var ctrlBtn: Button? = null
     private val letterButtons = mutableListOf<Button>()
     private val symbolButtons = mutableListOf<Pair<Button, String>>()
 
@@ -53,11 +55,20 @@ class JapaneseKeyboardService : InputMethodService() {
         root.findViewById<View>(R.id.key_backspace)?.setOnClickListener { deleteText() }
         root.findViewById<View>(R.id.key_enter)?.setOnClickListener { sendEnter() }
         root.findViewById<View>(R.id.key_space)?.setOnClickListener { commitText(" ") }
-        root.findViewById<View>(R.id.key_shift)?.setOnClickListener { toggleShift(root) }
-        (root.findViewById<View>(R.id.key_ctrl) as? Button)?.let { btn ->
-            btn.setOnClickListener { toggleCtrl(btn) }
-            updateCtrlLabel(btn)
+
+        shiftBtn = root.findViewById<Button>(R.id.key_shift)
+        shiftBtn?.setOnClickListener {
+            shiftOn = !shiftOn
+            updateShiftUI()
         }
+        updateShiftUI()
+
+        ctrlBtn = root.findViewById<Button>(R.id.key_ctrl)
+        ctrlBtn?.setOnClickListener {
+            ctrlOn = !ctrlOn
+            updateCtrlUI()
+        }
+        updateCtrlUI()
 
         return root
     }
@@ -82,8 +93,7 @@ class JapaneseKeyboardService : InputMethodService() {
                         val text = if (shiftOn) base.uppercase() else base.lowercase()
                         if (ctrlOn) {
                             val code = letterToKeyCode(base)
-                            if (code != null) sendKeyWithMeta(code, KeyEvent.META_CTRL_ON)
-                            else commitText(text)
+                            if (code != null) sendKeyWithMeta(code, KeyEvent.META_CTRL_ON) else commitText(text)
                         } else {
                             commitText(text)
                         }
@@ -105,8 +115,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
-    private fun toggleShift(root: View) {
-        shiftOn = !shiftOn
+    private fun updateShiftUI() {
         // Update labels for letter buttons
         for (btn in letterButtons) {
             val tag = btn.tag as? String ?: continue
@@ -117,16 +126,17 @@ class JapaneseKeyboardService : InputMethodService() {
         for ((btn, base) in symbolButtons) {
             btn.text = if (shiftOn) shiftSymbolMap[base] ?: base else base
         }
+        shiftBtn?.let { btn ->
+            btn.text = if (shiftOn) "Shift ON" else "Shift"
+            btn.isSelected = shiftOn
+        }
     }
 
-    private fun toggleCtrl(btn: Button) {
-        ctrlOn = !ctrlOn
-        updateCtrlLabel(btn)
-    }
-
-    private fun updateCtrlLabel(btn: Button) {
-        btn.text = if (ctrlOn) "Ctrl ON" else "Ctrl"
-        btn.isSelected = ctrlOn
+    private fun updateCtrlUI() {
+        ctrlBtn?.let { btn ->
+            btn.text = if (ctrlOn) "Ctrl ON" else "Ctrl"
+            btn.isSelected = ctrlOn
+        }
     }
 
     private fun sendKeyWithMeta(keyCode: Int, meta: Int) {
@@ -135,6 +145,8 @@ class JapaneseKeyboardService : InputMethodService() {
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta))
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, meta))
     }
+
+    // One-shot and lock behavior removed; simple toggle with click.
 
     private fun letterToKeyCode(letter: String): Int? {
         return when (letter.lowercase()) {
