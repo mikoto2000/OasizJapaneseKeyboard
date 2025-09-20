@@ -111,6 +111,14 @@ class JapaneseKeyboardService : InputMethodService() {
             setRepeatableKey(v) { sendDpad(KeyEvent.KEYCODE_DPAD_DOWN); consumeOneShotModifiers() }
         }
 
+        // ESC / TAB (repeat enabled)
+        root.findViewById<View>(R.id.key_esc)?.let { v ->
+            setRepeatableKey(v) { sendSimpleKey(KeyEvent.KEYCODE_ESCAPE); consumeOneShotModifiers() }
+        }
+        root.findViewById<View>(R.id.key_tab)?.let { v ->
+            setRepeatableKey(v) { sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() }
+        }
+
         return root
     }
 
@@ -194,6 +202,13 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     private fun sendDpad(keyCode: Int) {
+        val now = SystemClock.uptimeMillis()
+        val ic = currentInputConnection ?: return
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0))
+    }
+
+    private fun sendSimpleKey(keyCode: Int) {
         val now = SystemClock.uptimeMillis()
         val ic = currentInputConnection ?: return
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0))

@@ -9,12 +9,19 @@
     android:paddingBottom="4dp"
     android:background="#EFEFEF">
 
-    <!-- Row 1: Numbers and symbols -->
+    <!-- Row 1: ESC + Numbers and symbols -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
+
+        <Button
+            android:id="@+id/key_esc"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1.2"
+            android:text="Esc" />
 
         <!-- 13 keys: 1..0 - ^ ¥ -->
         <Button android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
@@ -52,14 +59,19 @@
             android:text="⌫" />
     </LinearLayout>
 
-    <!-- Row 2: QWERTY row -->
+    <!-- Row 2: TAB + QWERTY row -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <Space android:layout_width="12dp" android:layout_height="0dp" android:layout_weight="0" />
+        <Button
+            android:id="@+id/key_tab"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1.5"
+            android:text="Tab" />
 
         <Button android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
             android:text="q" android:tag="letter:q" />
