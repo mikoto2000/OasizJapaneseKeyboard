@@ -15,6 +15,7 @@ class JapaneseKeyboardService : InputMethodService() {
     private var shiftOn = false
     private var ctrlOn = false
     private var shiftBtn: Button? = null
+    private var shiftBtnRight: Button? = null
     private var ctrlBtn: Button? = null
     private val repeatHandler = Handler(Looper.getMainLooper())
     private val repeatTasks = mutableMapOf<View, Runnable>()
@@ -83,12 +84,32 @@ class JapaneseKeyboardService : InputMethodService() {
         }
         updateShiftUI()
 
+        shiftBtnRight = root.findViewById<Button>(R.id.key_shift_right)
+        shiftBtnRight?.setOnClickListener {
+            shiftOn = !shiftOn
+            updateShiftUI()
+        }
+
         ctrlBtn = root.findViewById<Button>(R.id.key_ctrl)
         ctrlBtn?.setOnClickListener {
             ctrlOn = !ctrlOn
             updateCtrlUI()
         }
         updateCtrlUI()
+
+        // Arrow keys (repeat enabled)
+        root.findViewById<View>(R.id.key_arrow_left)?.let { v ->
+            setRepeatableKey(v) { sendDpad(KeyEvent.KEYCODE_DPAD_LEFT); consumeOneShotModifiers() }
+        }
+        root.findViewById<View>(R.id.key_arrow_right)?.let { v ->
+            setRepeatableKey(v) { sendDpad(KeyEvent.KEYCODE_DPAD_RIGHT); consumeOneShotModifiers() }
+        }
+        root.findViewById<View>(R.id.key_arrow_up)?.let { v ->
+            setRepeatableKey(v) { sendDpad(KeyEvent.KEYCODE_DPAD_UP); consumeOneShotModifiers() }
+        }
+        root.findViewById<View>(R.id.key_arrow_down)?.let { v ->
+            setRepeatableKey(v) { sendDpad(KeyEvent.KEYCODE_DPAD_DOWN); consumeOneShotModifiers() }
+        }
 
         return root
     }
@@ -147,9 +168,14 @@ class JapaneseKeyboardService : InputMethodService() {
         for ((btn, base) in symbolButtons) {
             btn.text = if (shiftOn) shiftSymbolMap[base] ?: base else base
         }
+        val active = shiftOn
         shiftBtn?.let { btn ->
-            btn.text = if (shiftOn) "Shift ON" else "Shift"
-            btn.isSelected = shiftOn
+            btn.text = if (active) "Shift ON" else "Shift"
+            btn.isSelected = active
+        }
+        shiftBtnRight?.let { btn ->
+            btn.text = if (active) "Shift ON" else "Shift"
+            btn.isSelected = active
         }
     }
 
@@ -165,6 +191,13 @@ class JapaneseKeyboardService : InputMethodService() {
         val ic = currentInputConnection ?: return
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta))
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, meta))
+    }
+
+    private fun sendDpad(keyCode: Int) {
+        val now = SystemClock.uptimeMillis()
+        val ic = currentInputConnection ?: return
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0))
     }
 
     private fun consumeOneShotModifiers() {

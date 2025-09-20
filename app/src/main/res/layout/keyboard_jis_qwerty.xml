@@ -163,8 +163,18 @@
             android:text="." android:tag="symbol:." />
         <Button android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
             android:text="/" android:tag="symbol:/" />
-        <Button android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
-            android:text="&#92;" android:tag="symbol:&#92;" />
+        <Button
+            android:id="@+id/key_arrow_up"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="↑" />
+        <Button
+            android:id="@+id/key_shift_right"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1.5"
+            android:text="Shift" />
     </LinearLayout>
 
     <!-- Row 5: Ctrl + Space bar row -->
@@ -188,7 +198,27 @@
             android:layout_weight="4"
             android:text="Space" />
 
-        <Space android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+        <Button
+            android:id="@+id/key_arrow_left"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="←" />
+
+        <Button
+            android:id="@+id/key_arrow_down"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="↓" />
+
+        <Button
+            android:id="@+id/key_arrow_right"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="→" />
     </LinearLayout>
+
 
 </LinearLayout>
