@@ -58,13 +58,22 @@ class JapaneseKeyboardService : InputMethodService() {
 
         // Special keys (repeat enabled)
         root.findViewById<View>(R.id.key_backspace)?.let { v ->
-            setRepeatableKey(v, initialDelay = 350L, repeatInterval = 60L) { deleteText() }
+            setRepeatableKey(v, initialDelay = 350L, repeatInterval = 60L) {
+                deleteText()
+                consumeOneShotModifiers()
+            }
         }
         root.findViewById<View>(R.id.key_enter)?.let { v ->
-            setRepeatableKey(v) { sendEnter() }
+            setRepeatableKey(v) {
+                sendEnter()
+                consumeOneShotModifiers()
+            }
         }
         root.findViewById<View>(R.id.key_space)?.let { v ->
-            setRepeatableKey(v) { commitText(" ") }
+            setRepeatableKey(v) {
+                commitText(" ")
+                consumeOneShotModifiers()
+            }
         }
 
         shiftBtn = root.findViewById<Button>(R.id.key_shift)
@@ -108,6 +117,7 @@ class JapaneseKeyboardService : InputMethodService() {
                         } else {
                             commitText(text)
                         }
+                        consumeOneShotModifiers()
                     }
                 }
                 tag.startsWith("symbol:") -> {
@@ -119,6 +129,7 @@ class JapaneseKeyboardService : InputMethodService() {
                     setRepeatableKey(view) {
                         val out = if (shiftOn) shiftSymbolMap[base] ?: base else base
                         commitText(out)
+                        consumeOneShotModifiers()
                     }
                 }
             }
@@ -154,6 +165,16 @@ class JapaneseKeyboardService : InputMethodService() {
         val ic = currentInputConnection ?: return
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, meta))
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, meta))
+    }
+
+    private fun consumeOneShotModifiers() {
+        var changed = false
+        if (shiftOn) { shiftOn = false; changed = true }
+        if (ctrlOn) { ctrlOn = false; changed = true }
+        if (changed) {
+            updateShiftUI()
+            updateCtrlUI()
+        }
     }
 
     private fun setRepeatableKey(
