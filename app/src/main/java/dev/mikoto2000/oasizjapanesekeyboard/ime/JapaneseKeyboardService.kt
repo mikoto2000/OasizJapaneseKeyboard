@@ -17,6 +17,7 @@ class JapaneseKeyboardService : InputMethodService() {
     private var shiftBtn: Button? = null
     private var shiftBtnRight: Button? = null
     private var ctrlBtn: Button? = null
+    private var langBtn: Button? = null
     private var rootViewRef: View? = null
     private var feedbackEnabled = true
     private val repeatHandler = Handler(Looper.getMainLooper())
@@ -24,6 +25,10 @@ class JapaneseKeyboardService : InputMethodService() {
     private val letterButtons = mutableListOf<Button>()
     private val symbolButtons = mutableListOf<Pair<Button, String>>()
     private var fnVisible = true
+
+    // Kana composing state
+    private var kanaMode = false // default: ASCII mode
+    private val romaji = RomajiConverter()
 
     private val shiftSymbolMap: Map<String, String> = mapOf(
         // Number row
@@ -83,44 +88,57 @@ class JapaneseKeyboardService : InputMethodService() {
 
         shiftBtn = root.findViewById<Button>(R.id.key_shift)
         shiftBtn?.setOnClickListener {
-            shiftOn = !shiftOn
-            updateShiftUI()
+            if (!kanaMode) {
+                shiftOn = !shiftOn
+                updateShiftUI()
+            }
         }
         updateShiftUI()
 
         shiftBtnRight = root.findViewById<Button>(R.id.key_shift_right)
         shiftBtnRight?.setOnClickListener {
-            shiftOn = !shiftOn
-            updateShiftUI()
+            if (!kanaMode) {
+                shiftOn = !shiftOn
+                updateShiftUI()
+            }
         }
 
         ctrlBtn = root.findViewById<Button>(R.id.key_ctrl)
         ctrlBtn?.setOnClickListener {
-            ctrlOn = !ctrlOn
-            updateCtrlUI()
+            if (!kanaMode) {
+                ctrlOn = !ctrlOn
+                updateCtrlUI()
+            }
         }
         updateCtrlUI()
 
+        // Language toggle (A <-> あ)
+        langBtn = root.findViewById<Button>(R.id.key_lang_toggle)
+        langBtn?.setOnClickListener {
+            toggleKanaMode()
+        }
+        updateLangToggleUI()
+
         // Arrow keys (repeat enabled)
         root.findViewById<View>(R.id.key_arrow_left)?.let { v ->
-            setRepeatableKey(v) { sendDpad(KeyEvent.KEYCODE_DPAD_LEFT); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_LEFT); consumeOneShotModifiers() }
         }
         root.findViewById<View>(R.id.key_arrow_right)?.let { v ->
-            setRepeatableKey(v) { sendDpad(KeyEvent.KEYCODE_DPAD_RIGHT); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_RIGHT); consumeOneShotModifiers() }
         }
         root.findViewById<View>(R.id.key_arrow_up)?.let { v ->
-            setRepeatableKey(v) { sendDpad(KeyEvent.KEYCODE_DPAD_UP); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_UP); consumeOneShotModifiers() }
         }
         root.findViewById<View>(R.id.key_arrow_down)?.let { v ->
-            setRepeatableKey(v) { sendDpad(KeyEvent.KEYCODE_DPAD_DOWN); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_DOWN); consumeOneShotModifiers() }
         }
 
         // ESC / TAB (repeat enabled)
         root.findViewById<View>(R.id.key_esc)?.let { v ->
-            setRepeatableKey(v) { sendSimpleKey(KeyEvent.KEYCODE_ESCAPE); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_ESCAPE); consumeOneShotModifiers() }
         }
         root.findViewById<View>(R.id.key_tab)?.let { v ->
-            setRepeatableKey(v) { sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() }
         }
 
         // Function keys F1..F12 (repeat enabled)
@@ -140,7 +158,7 @@ class JapaneseKeyboardService : InputMethodService() {
         )
         for ((rid, code) in fnMap) {
             root.findViewById<View>(rid)?.let { v ->
-                setRepeatableKey(v) { sendSimpleKey(code); consumeOneShotModifiers() }
+                setRepeatableKey(v) { flushComposingIfNeeded(); sendSimpleKey(code); consumeOneShotModifiers() }
             }
         }
 
@@ -189,14 +207,18 @@ class JapaneseKeyboardService : InputMethodService() {
                     // Initial label based on shift state
                     view.text = if (shiftOn) base.uppercase() else base.lowercase()
                     setRepeatableKey(view) {
-                        val text = if (shiftOn) base.uppercase() else base.lowercase()
-                        if (ctrlOn) {
-                            val code = letterToKeyCode(base)
-                            if (code != null) sendKeyWithMeta(code, KeyEvent.META_CTRL_ON) else commitText(text)
+                        if (kanaMode) {
+                            handleKanaLetter(base)
                         } else {
-                            commitText(text)
+                            val text = if (shiftOn) base.uppercase() else base.lowercase()
+                            if (ctrlOn) {
+                                val code = letterToKeyCode(base)
+                                if (code != null) sendKeyWithMeta(code, KeyEvent.META_CTRL_ON) else commitText(text)
+                            } else {
+                                commitText(text)
+                            }
+                            consumeOneShotModifiers()
                         }
-                        consumeOneShotModifiers()
                     }
                 }
                 tag.startsWith("symbol:") -> {
@@ -207,8 +229,9 @@ class JapaneseKeyboardService : InputMethodService() {
                     view.text = label
                     setRepeatableKey(view) {
                         val out = if (shiftOn) shiftSymbolMap[base] ?: base else base
+                        if (kanaMode) flushComposingIfNeeded()
                         commitText(out)
-                        consumeOneShotModifiers()
+                        if (!kanaMode) consumeOneShotModifiers()
                     }
                 }
             }
@@ -241,6 +264,8 @@ class JapaneseKeyboardService : InputMethodService() {
         ctrlBtn?.let { btn ->
             btn.text = if (ctrlOn) "Ctrl ON" else "Ctrl"
             btn.isSelected = ctrlOn
+            btn.isEnabled = !kanaMode
+            btn.alpha = if (kanaMode) 0.5f else 1.0f
         }
     }
 
@@ -375,12 +400,76 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     private fun deleteText() {
-        currentInputConnection?.deleteSurroundingText(1, 0)
+        if (kanaMode && romaji.hasComposing()) {
+            romaji.backspace()
+            updateComposingText()
+        } else {
+            currentInputConnection?.deleteSurroundingText(1, 0)
+        }
     }
 
     private fun sendEnter() {
         val ic = currentInputConnection ?: return
-        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+        if (kanaMode && romaji.hasComposing()) {
+            val text = romaji.flush()
+            ic.commitText(text, 1)
+            ic.finishComposingText()
+        } else {
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+        }
+    }
+
+    private fun updateLangToggleUI() {
+        langBtn?.let { btn ->
+            btn.text = if (kanaMode) "あ" else "A"
+            // Disable shift while in kana mode
+            shiftBtn?.isEnabled = !kanaMode
+            shiftBtnRight?.isEnabled = !kanaMode
+            val alpha = if (kanaMode) 0.5f else 1.0f
+            shiftBtn?.alpha = alpha
+            shiftBtnRight?.alpha = alpha
+            updateShiftUI()
+            updateCtrlUI()
+            if (!kanaMode) {
+                // Ensure composing cleared when leaving kana mode
+                if (romaji.hasComposing()) {
+                    currentInputConnection?.finishComposingText()
+                }
+                romaji.clear()
+            }
+        }
+    }
+
+    private fun toggleKanaMode() {
+        kanaMode = !kanaMode
+        updateLangToggleUI()
+    }
+
+    private fun updateComposingText() {
+        val ic = currentInputConnection ?: return
+        val text = romaji.getComposing()
+        if (text.isEmpty()) {
+            ic.finishComposingText()
+        } else {
+            ic.setComposingText(text, 1)
+        }
+    }
+
+    private fun handleKanaLetter(base: String) {
+        if (base.isEmpty()) return
+        val c = base[0]
+        romaji.pushChar(c)
+        updateComposingText()
+    }
+
+    private fun flushComposingIfNeeded() {
+        if (!kanaMode) return
+        if (romaji.hasComposing()) {
+            val ic = currentInputConnection ?: return
+            val text = romaji.flush()
+            ic.commitText(text, 1)
+            ic.finishComposingText()
+        }
     }
 }

@@ -13,6 +13,7 @@ Android 向けの日本語フルキーボード（IME）を目指すプロジェ
 - Ctrl トグル（英字には `META_CTRL_ON` の KeyEvent を送出。対応アプリでショートカット動作）
 - キーリピート（長押しで連続入力。Ctrl/Shift 以外のキーに適用）
 - キー押下フィードバック切替（スペース左の「FX」ボタンで、押下時の色変化のON/OFFを切替）
+- ローマ字かな合成（「A/あ」ボタンで切替、Space/Enterで確定）
 
 注意
 - Ctrl 付き KeyEvent を受け取らないアプリもあります。
@@ -41,6 +42,8 @@ Android 向けの日本語フルキーボード（IME）を目指すプロジェ
 - Shift: クリックで ON/OFF。ラベルに「Shift / Shift ON」を表示
 - Ctrl: クリックで ON/OFF。ラベルに「Ctrl / Ctrl ON」を表示（英字に対し `META_CTRL_ON` を送出）
 - 長押しリピート: Ctrl/Shift 以外のキー（英字/記号/Space/Enter/Backspace）で有効
+- 言語切替（A/あ）: デフォルトは英数（A）。「あ」にするとローマ字入力をかなに合成し、編集中テキスト（preedit）として表示。Space/Enter で確定。Backspace は合成テキストから後退。
+  - かなモード中は Shift/Ctrl は無効（将来的にカタカナ切替など拡張検討）。
 
 主なファイル
 - IME サービス: `app/src/main/java/dev/mikoto2000/oasizjapanesekeyboard/ime/JapaneseKeyboardService.kt`
@@ -53,6 +56,10 @@ Android 向けの日本語フルキーボード（IME）を目指すプロジェ
 - かな配列（JISかな）やフリック入力 UI の追加
 - 候補バー、予測変換、辞書連携
 - 視覚スタイル（選択状態の色、角丸、サイズ調整）の改善
+  
+フェーズ2（予告）: Mozc 辞書を用いた変換
+- かな読み（preedit）を Space で候補展開、候補バーから選択確定
+- JNI/NDK で Mozc Converter を組み込み、辞書データを assets/raw からロード
 
 ライセンス
 

@@ -233,6 +233,13 @@
             android:text="FX" />
 
         <Button
+            android:id="@+id/key_lang_toggle"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1.0"
+            android:text="A" />
+
+        <Button
             android:id="@+id/key_fn_toggle"
             android:layout_width="0dp"
             android:layout_height="48dp"
