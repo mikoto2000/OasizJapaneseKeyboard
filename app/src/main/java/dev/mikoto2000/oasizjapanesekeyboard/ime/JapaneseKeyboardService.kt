@@ -696,10 +696,16 @@ class JapaneseKeyboardService : InputMethodService() {
         val next = segs[idx + 1]
         if (delta > 0) {
             // expand current to right: take 1 char from next head
-            if (next.reading.length <= 1) return
-            val ch = next.reading.first()
-            cur.reading += ch
-            next.reading = next.reading.substring(1)
+            if (next.reading.length <= 1) {
+                // Merge next into current when next is single-character segment
+                cur.reading += next.reading
+                // Remove next segment
+                segs.removeAt(idx + 1)
+            } else {
+                val ch = next.reading.first()
+                cur.reading += ch
+                next.reading = next.reading.substring(1)
+            }
         } else if (delta < 0) {
             // shrink current from right: give 1 char to next head
             if (cur.reading.length <= 1) return
@@ -710,13 +716,17 @@ class JapaneseKeyboardService : InputMethodService() {
 
         // reset candidates for affected segments
         cur.candidates.clear(); cur.selectedIndex = 0; cur.loading = true
-        next.candidates.clear(); next.selectedIndex = 0; next.loading = true
+        // next may have been removed by merge; refresh if still exists
+        if (idx + 1 < segs.size) {
+            val n2 = segs[idx + 1]
+            n2.candidates.clear(); n2.selectedIndex = 0; n2.loading = true
+        }
         // Immediately reflect UI with placeholder (readings) before async results arrive
         updateSegmentsUI()
         updateComposingFromSegments()
         updateCandidatesUI()
         loadSegmentCandidates(idx)
-        loadSegmentCandidates(idx + 1)
+        if (idx + 1 < segs.size) loadSegmentCandidates(idx + 1)
     }
 
     private fun commitSelectedCandidate() {
