@@ -9,6 +9,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.LinearLayout
 import dev.mikoto2000.oasizjapanesekeyboard.R
 
 class JapaneseKeyboardService : InputMethodService() {
@@ -29,6 +30,14 @@ class JapaneseKeyboardService : InputMethodService() {
     // Kana composing state
     private var kanaMode = false // default: ASCII mode
     private val romaji = RomajiConverter()
+
+    // Conversion (candidates) state
+    private var conversionReading: String? = null
+    private var candidates: List<String> = emptyList()
+    private var selectedCandidateIndex: Int = 0
+    private var candidateContainer: View? = null
+    private var candidateList: ViewGroup? = null
+    private val converter: JapaneseConverter = SimpleConverter()
 
     private val shiftSymbolMap: Map<String, String> = mapOf(
         // Number row
@@ -80,9 +89,24 @@ class JapaneseKeyboardService : InputMethodService() {
             }
         }
         root.findViewById<View>(R.id.key_space)?.let { v ->
-            setRepeatableKey(v) {
-                commitText(" ")
-                consumeOneShotModifiers()
+            setRepeatableKey(v, initialDelay = 400L, repeatInterval = 150L) {
+                if (kanaMode) {
+                    if (isInConversion()) {
+                        // cycle selection
+                        if (candidates.isNotEmpty()) {
+                            selectedCandidateIndex = (selectedCandidateIndex + 1) % candidates.size
+                            updateCandidateSelectionUI()
+                        }
+                    } else if (romaji.hasComposing()) {
+                        // start conversion
+                        startConversion()
+                    } else {
+                        commitText(" ")
+                    }
+                } else {
+                    commitText(" ")
+                    consumeOneShotModifiers()
+                }
             }
         }
 
@@ -121,24 +145,24 @@ class JapaneseKeyboardService : InputMethodService() {
 
         // Arrow keys (repeat enabled)
         root.findViewById<View>(R.id.key_arrow_left)?.let { v ->
-            setRepeatableKey(v) { flushComposingIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_LEFT); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_LEFT); consumeOneShotModifiers() }
         }
         root.findViewById<View>(R.id.key_arrow_right)?.let { v ->
-            setRepeatableKey(v) { flushComposingIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_RIGHT); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_RIGHT); consumeOneShotModifiers() }
         }
         root.findViewById<View>(R.id.key_arrow_up)?.let { v ->
-            setRepeatableKey(v) { flushComposingIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_UP); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_UP); consumeOneShotModifiers() }
         }
         root.findViewById<View>(R.id.key_arrow_down)?.let { v ->
-            setRepeatableKey(v) { flushComposingIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_DOWN); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_DOWN); consumeOneShotModifiers() }
         }
 
         // ESC / TAB (repeat enabled)
         root.findViewById<View>(R.id.key_esc)?.let { v ->
-            setRepeatableKey(v) { flushComposingIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_ESCAPE); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_ESCAPE); consumeOneShotModifiers() }
         }
         root.findViewById<View>(R.id.key_tab)?.let { v ->
-            setRepeatableKey(v) { flushComposingIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() }
+            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() }
         }
 
         // Function keys F1..F12 (repeat enabled)
@@ -158,7 +182,7 @@ class JapaneseKeyboardService : InputMethodService() {
         )
         for ((rid, code) in fnMap) {
             root.findViewById<View>(rid)?.let { v ->
-                setRepeatableKey(v) { flushComposingIfNeeded(); sendSimpleKey(code); consumeOneShotModifiers() }
+                setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendSimpleKey(code); consumeOneShotModifiers() }
             }
         }
 
@@ -183,6 +207,10 @@ class JapaneseKeyboardService : InputMethodService() {
             }
             updateFeedbackToggleUI(btn)
         }
+
+        // Candidate views
+        candidateContainer = root.findViewById(R.id.candidate_container)
+        candidateList = root.findViewById(R.id.candidate_list)
 
         // Apply initial backgrounds to all keys
         applyKeyBackgrounds()
@@ -229,7 +257,9 @@ class JapaneseKeyboardService : InputMethodService() {
                     view.text = label
                     setRepeatableKey(view) {
                         val out = if (shiftOn) shiftSymbolMap[base] ?: base else base
-                        if (kanaMode) flushComposingIfNeeded()
+                        if (kanaMode) {
+                            flushComposingOrConversionIfNeeded()
+                        }
                         commitText(out)
                         if (!kanaMode) consumeOneShotModifiers()
                     }
@@ -400,24 +430,36 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     private fun deleteText() {
-        if (kanaMode && romaji.hasComposing()) {
-            romaji.backspace()
-            updateComposingText()
-        } else {
-            currentInputConnection?.deleteSurroundingText(1, 0)
+        if (kanaMode) {
+            if (isInConversion()) {
+                cancelConversionRestore()
+                return
+            }
+            if (romaji.hasComposing()) {
+                romaji.backspace()
+                updateComposingText()
+                return
+            }
         }
+        currentInputConnection?.deleteSurroundingText(1, 0)
     }
 
     private fun sendEnter() {
         val ic = currentInputConnection ?: return
-        if (kanaMode && romaji.hasComposing()) {
-            val text = romaji.flush()
-            ic.commitText(text, 1)
-            ic.finishComposingText()
-        } else {
-            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+        if (kanaMode) {
+            if (isInConversion()) {
+                commitSelectedCandidate()
+                return
+            }
+            if (romaji.hasComposing()) {
+                val text = romaji.flush()
+                ic.commitText(text, 1)
+                ic.finishComposingText()
+                return
+            }
         }
+        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+        ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
     }
 
     private fun updateLangToggleUI() {
@@ -433,10 +475,15 @@ class JapaneseKeyboardService : InputMethodService() {
             updateCtrlUI()
             if (!kanaMode) {
                 // Ensure composing cleared when leaving kana mode
-                if (romaji.hasComposing()) {
-                    currentInputConnection?.finishComposingText()
+                if (isInConversion()) {
+                    // commit selected before leaving kana mode
+                    commitSelectedCandidate()
+                } else {
+                    if (romaji.hasComposing()) {
+                        currentInputConnection?.finishComposingText()
+                    }
+                    romaji.clear()
                 }
-                romaji.clear()
             }
         }
     }
@@ -458,6 +505,10 @@ class JapaneseKeyboardService : InputMethodService() {
 
     private fun handleKanaLetter(base: String) {
         if (base.isEmpty()) return
+        if (isInConversion()) {
+            // typing while selecting: cancel conversion and restore reading to composing
+            cancelConversionRestore()
+        }
         val c = base[0]
         romaji.pushChar(c)
         updateComposingText()
@@ -470,6 +521,92 @@ class JapaneseKeyboardService : InputMethodService() {
             val text = romaji.flush()
             ic.commitText(text, 1)
             ic.finishComposingText()
+        }
+    }
+
+    private fun flushComposingOrConversionIfNeeded() {
+        if (!kanaMode) return
+        if (isInConversion()) {
+            commitSelectedCandidate()
+        } else {
+            flushComposingIfNeeded()
+        }
+    }
+
+    private fun isInConversion(): Boolean = conversionReading != null
+
+    private fun startConversion() {
+        val ic = currentInputConnection ?: return
+        val reading = romaji.flush()
+        if (reading.isEmpty()) return
+        // Keep composing region with the reading so it can be replaced by commitText
+        ic.setComposingText(reading, 1)
+        conversionReading = reading
+        candidates = converter.query(reading)
+        selectedCandidateIndex = 0
+        showCandidatesUI()
+    }
+
+    private fun commitSelectedCandidate() {
+        val ic = currentInputConnection ?: return
+        if (isInConversion()) {
+            val text = candidates.getOrNull(selectedCandidateIndex) ?: conversionReading!!
+            ic.commitText(text, 1)
+            hideCandidatesUI()
+            conversionReading = null
+            candidates = emptyList()
+        }
+    }
+
+    private fun cancelConversionRestore() {
+        if (!isInConversion()) return
+        val ic = currentInputConnection ?: return
+        val reading = conversionReading!!
+        hideCandidatesUI()
+        conversionReading = null
+        candidates = emptyList()
+        romaji.restoreFromKana(reading)
+        ic.setComposingText(reading, 1)
+    }
+
+    private fun showCandidatesUI() {
+        candidateContainer?.visibility = View.VISIBLE
+        updateCandidatesUI()
+    }
+
+    private fun hideCandidatesUI() {
+        candidateContainer?.visibility = View.GONE
+        candidateList?.removeAllViews()
+    }
+
+    private fun updateCandidatesUI() {
+        val list = candidateList ?: return
+        list.removeAllViews()
+        candidates.forEachIndexed { index, cand ->
+            val btn = Button(this)
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+            lp.marginEnd = 6
+            btn.layoutParams = lp
+            btn.text = if (index == selectedCandidateIndex) "•$cand" else cand
+            btn.setOnClickListener {
+                selectedCandidateIndex = index
+                commitSelectedCandidate()
+            }
+            list.addView(btn)
+        }
+    }
+
+    private fun updateCandidateSelectionUI() {
+        val list = candidateList ?: return
+        for (i in 0 until list.childCount) {
+            val v = list.getChildAt(i)
+            if (v is Button) {
+                val text = candidates.getOrNull(i) ?: ""
+                v.text = if (i == selectedCandidateIndex) "•$text" else text
+            }
         }
     }
 }

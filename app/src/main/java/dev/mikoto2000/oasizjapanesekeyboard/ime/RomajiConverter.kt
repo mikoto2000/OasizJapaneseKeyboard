@@ -117,6 +117,12 @@ class RomajiConverter {
         return out
     }
 
+    fun restoreFromKana(kana: String) {
+        produced.setLength(0)
+        produced.append(kana)
+        buffer.setLength(0)
+    }
+
     private fun consume() {
         // Handle sokuon for double consonants (except 'n') at buffer head
         while (true) {
@@ -173,4 +179,3 @@ class RomajiConverter {
         }
     }
 }
-
