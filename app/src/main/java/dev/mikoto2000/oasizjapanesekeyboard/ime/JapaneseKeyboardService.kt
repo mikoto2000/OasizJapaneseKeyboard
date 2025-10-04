@@ -37,7 +37,7 @@ class JapaneseKeyboardService : InputMethodService() {
     private var selectedCandidateIndex: Int = 0
     private var candidateContainer: View? = null
     private var candidateList: ViewGroup? = null
-    private val converter: JapaneseConverter = SimpleConverter()
+    private var converter: JapaneseConverter = SimpleConverter()
 
     private val shiftSymbolMap: Map<String, String> = mapOf(
         // Number row
@@ -71,6 +71,8 @@ class JapaneseKeyboardService : InputMethodService() {
     override fun onCreateInputView(): View {
         val root = layoutInflater.inflate(R.layout.keyboard_jis_qwerty, null)
         rootViewRef = root
+        // Initialize converter (dictionary-backed with fallback)
+        converter = DictionaryConverter(this)
 
         // Wire generic keys by tag
         wireKeysRecursively(root)

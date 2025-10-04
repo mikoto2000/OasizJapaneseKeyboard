@@ -64,7 +64,18 @@ Android 向けの日本語フルキーボード（IME）を目指すプロジェ
   
 フェーズ2（予告）: Mozc 辞書を用いた変換
 - かな読み（preedit）を Space で候補展開、候補バーから選択確定
-- JNI/NDK で Mozc Converter を組み込み、辞書データを assets/raw からロード
+- 実装は Pure Kotlin。Mozc の辞書素データをビルド時に加工し、アプリは assets の TSV/独自バイナリ/SQLite を読み込む方式
+
+辞書ファイル（暫定）
+- 位置: `app/src/main/assets/dictionary/words.tsv`
+- 形式: UTF-8, タブ区切り（`読み(ひらがな)\t表記\tコスト(任意)`）
+- 例:
+  - `わたし\t私\t100`
+  - `にほん\t日本\t120`
+
+将来の改善
+- Mozc のテキスト辞書からビルド時に自動生成（Gradle タスク化）
+- 大規模辞書では SQLite/メモリマップなどで常時全件ロードを避ける
 
 ライセンス
 
