@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">OasizJapaneseKeyboard</string>
+    <string name="license_title">Open Source Licenses</string>
+    <string name="open_licenses">Licenses</string>
 </resources>

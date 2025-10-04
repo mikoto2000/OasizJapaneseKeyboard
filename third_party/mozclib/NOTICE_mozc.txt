@@ -1,0 +1,15 @@
+Third-Party Notices for Mozc
+
+This file is intended to contain attributions and license notices for
+third-party components included in Mozc. Please replace this placeholder
+with the official Mozc NOTICE / third_party license list from the Mozc
+repository appropriate to the version you are using.
+
+At minimum, ensure that any third-party libraries, data, or resources
+distributed as part of Mozc are properly attributed here with their
+respective licenses and copyright.
+
+Note: This placeholder is provided to help integrate license display into
+the application. For production distribution, you must insert the official
+Mozc third-party notices.
+

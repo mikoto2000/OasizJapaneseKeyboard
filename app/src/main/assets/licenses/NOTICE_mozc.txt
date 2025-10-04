@@ -1,0 +1,5 @@
+See repository copy at third_party/mozclib/NOTICE_mozc.txt
+
+Third-Party Notices for Mozc (placeholder)
+
+Replace this file with the official Mozc third-party notices list.

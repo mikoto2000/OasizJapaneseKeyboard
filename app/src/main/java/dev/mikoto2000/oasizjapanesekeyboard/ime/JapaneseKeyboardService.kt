@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import java.util.concurrent.Executors
 import dev.mikoto2000.oasizjapanesekeyboard.R
 
 class JapaneseKeyboardService : InputMethodService() {
@@ -35,9 +36,23 @@ class JapaneseKeyboardService : InputMethodService() {
     private var conversionReading: String? = null
     private var candidates: List<String> = emptyList()
     private var selectedCandidateIndex: Int = 0
+    private var candidatesRoot: View? = null
+    private var segmentList: ViewGroup? = null
     private var candidateContainer: View? = null
     private var candidateList: ViewGroup? = null
     private var converter: JapaneseConverter = SimpleConverter()
+    private val convExecutor = Executors.newSingleThreadExecutor()
+    private var convQuerySeq: Long = 0L
+
+    // Segment conversion state
+    private data class Segment(
+        var reading: String,
+        var candidates: MutableList<String> = mutableListOf(),
+        var selectedIndex: Int = 0,
+        var loading: Boolean = false
+    )
+    private var segments: MutableList<Segment>? = null
+    private var segmentFocus: Int = 0
 
     private val shiftSymbolMap: Map<String, String> = mapOf(
         // Number row
@@ -71,8 +86,12 @@ class JapaneseKeyboardService : InputMethodService() {
     override fun onCreateInputView(): View {
         val root = layoutInflater.inflate(R.layout.keyboard_jis_qwerty, null)
         rootViewRef = root
-        // Initialize converter (dictionary-backed with fallback)
-        converter = DictionaryConverter(this)
+        // Initialize converter: prefer SQLite dictionary; fallback to TSV; then to simple built-in
+        converter = try {
+            SqliteDictionaryConverter(this)
+        } catch (e: Exception) {
+            DictionaryConverter(this)
+        }
 
         // Wire generic keys by tag
         wireKeysRecursively(root)
@@ -94,8 +113,17 @@ class JapaneseKeyboardService : InputMethodService() {
             setRepeatableKey(v, initialDelay = 400L, repeatInterval = 150L) {
                 if (kanaMode) {
                     if (isInConversion()) {
-                        // cycle selection
-                        if (candidates.isNotEmpty()) {
+                        val segs = segments
+                        if (segs != null && segs.isNotEmpty()) {
+                            val focus = segs[segmentFocus]
+                            val size = if (focus.candidates.isNotEmpty()) focus.candidates.size else 1
+                            if (size > 0) {
+                                focus.selectedIndex = (focus.selectedIndex + 1) % size
+                                updateCandidatesUI()
+                                updateSegmentsUI()
+                                updateComposingFromSegments()
+                            }
+                        } else if (candidates.isNotEmpty()) {
                             selectedCandidateIndex = (selectedCandidateIndex + 1) % candidates.size
                             updateCandidateSelectionUI()
                         }
@@ -147,10 +175,22 @@ class JapaneseKeyboardService : InputMethodService() {
 
         // Arrow keys (repeat enabled)
         root.findViewById<View>(R.id.key_arrow_left)?.let { v ->
-            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_LEFT); consumeOneShotModifiers() }
+            setRepeatableKey(v) {
+                if (kanaMode && isInConversion() && segments != null) {
+                    moveSegmentFocus(-1)
+                } else {
+                    flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_LEFT); consumeOneShotModifiers()
+                }
+            }
         }
         root.findViewById<View>(R.id.key_arrow_right)?.let { v ->
-            setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_RIGHT); consumeOneShotModifiers() }
+            setRepeatableKey(v) {
+                if (kanaMode && isInConversion() && segments != null) {
+                    moveSegmentFocus(1)
+                } else {
+                    flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_RIGHT); consumeOneShotModifiers()
+                }
+            }
         }
         root.findViewById<View>(R.id.key_arrow_up)?.let { v ->
             setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_UP); consumeOneShotModifiers() }
@@ -211,8 +251,18 @@ class JapaneseKeyboardService : InputMethodService() {
         }
 
         // Candidate views
+        candidatesRoot = root.findViewById(R.id.candidates_root)
+        segmentList = root.findViewById(R.id.segment_list)
         candidateContainer = root.findViewById(R.id.candidate_container)
         candidateList = root.findViewById(R.id.candidate_list)
+
+        // Segment boundary adjust buttons
+        root.findViewById<Button>(R.id.segment_shrink_right)?.setOnClickListener {
+            adjustBoundaryRight(-1)
+        }
+        root.findViewById<Button>(R.id.segment_expand_right)?.setOnClickListener {
+            adjustBoundaryRight(1)
+        }
 
         // Apply initial backgrounds to all keys
         applyKeyBackgrounds()
@@ -486,6 +536,8 @@ class JapaneseKeyboardService : InputMethodService() {
                     }
                     romaji.clear()
                 }
+                // Invalidate any in-flight conversion queries
+                convQuerySeq++
             }
         }
     }
@@ -503,6 +555,12 @@ class JapaneseKeyboardService : InputMethodService() {
         } else {
             ic.setComposingText(text, 1)
         }
+    }
+
+    private fun updateComposingFromSegments() {
+        val ic = currentInputConnection ?: return
+        val out = joinedOutputFromSegments()
+        ic.setComposingText(out, 1)
     }
 
     private fun handleKanaLetter(base: String) {
@@ -541,22 +599,151 @@ class JapaneseKeyboardService : InputMethodService() {
         val ic = currentInputConnection ?: return
         val reading = romaji.flush()
         if (reading.isEmpty()) return
-        // Keep composing region with the reading so it can be replaced by commitText
-        ic.setComposingText(reading, 1)
         conversionReading = reading
-        candidates = converter.query(reading)
-        selectedCandidateIndex = 0
+        // start new conversion session (invalidate in-flight queries)
+        convQuerySeq++
+        segments = buildSegments(reading)
+        segmentFocus = 0
+        ic.setComposingText(joinedOutputFromSegments(), 1)
         showCandidatesUI()
+        loadSegmentCandidates(segmentFocus)
+    }
+
+    private fun buildSegments(reading: String): MutableList<Segment> {
+        val maxLen = 6
+        val segs = mutableListOf<Segment>()
+        var i = 0
+        while (i < reading.length) {
+            var taken = 1
+            var bestLen = 1
+            var bestScore = 0
+            val maxTry = kotlin.math.min(maxLen, reading.length - i)
+            for (l in maxTry downTo 1) {
+                val sub = reading.substring(i, i + l)
+                val qs = try { converter.query(sub) } catch (_: Throwable) { emptyList() }
+                // score by number of candidates beyond baseline (reading + katakana)
+                val score = (qs.size - 2).coerceAtLeast(0)
+                if (l == 1 || score > 0) {
+                    if (score > bestScore || (score == bestScore && l > bestLen)) {
+                        bestScore = score
+                        bestLen = l
+                    }
+                }
+            }
+            taken = bestLen
+            val segReading = reading.substring(i, i + taken)
+            segs.add(Segment(segReading))
+            i += taken
+        }
+        return segs
+    }
+
+    private fun joinedOutputFromSegments(): String {
+        val segs = segments ?: return conversionReading ?: ""
+        val sb = StringBuilder()
+        for (seg in segs) {
+            val out = currentSegmentOutput(seg)
+            sb.append(out)
+        }
+        return sb.toString()
+    }
+
+    private fun currentSegmentOutput(seg: Segment): String {
+        return if (seg.candidates.isNotEmpty()) {
+            seg.candidates.getOrNull(seg.selectedIndex) ?: seg.reading
+        } else seg.reading
+    }
+
+    private fun moveSegmentFocus(delta: Int) {
+        val segs = segments ?: return
+        if (segs.isEmpty()) return
+        val newIdx = (segmentFocus + delta).coerceIn(0, segs.lastIndex)
+        if (newIdx == segmentFocus) return
+        segmentFocus = newIdx
+        updateSegmentsUI()
+        loadSegmentCandidates(segmentFocus)
+    }
+
+    private fun loadSegmentCandidates(index: Int) {
+        val segs = segments ?: return
+        val seg = segs.getOrNull(index) ?: return
+        val reading = seg.reading
+        seg.loading = true
+        updateCandidatesUI()
+        val token = convQuerySeq
+        convExecutor.execute {
+            val res = try { converter.query(reading) } catch (_: Throwable) { emptyList() }
+            repeatHandler.post {
+                if (isInConversion() && convQuerySeq == token && segments === segs && segs.getOrNull(index)?.reading == reading) {
+                    seg.candidates = res.toMutableList()
+                    seg.loading = false
+                    // Initialize selection to first candidate if available
+                    if (seg.selectedIndex !in seg.candidates.indices) seg.selectedIndex = 0
+                    updateSegmentsUI()
+                    updateCandidatesUI()
+                    updateComposingFromSegments()
+                }
+            }
+        }
+    }
+
+    private fun adjustBoundaryRight(delta: Int) {
+        val segs = segments ?: return
+        if (segs.isEmpty()) return
+        val idx = segmentFocus
+        if (idx < 0 || idx >= segs.size - 1) return // need next segment to adjust right boundary
+        val cur = segs[idx]
+        val next = segs[idx + 1]
+        if (delta > 0) {
+            // expand current to right: take 1 char from next head
+            if (next.reading.length <= 1) return
+            val ch = next.reading.first()
+            cur.reading += ch
+            next.reading = next.reading.substring(1)
+        } else if (delta < 0) {
+            // shrink current from right: give 1 char to next head
+            if (cur.reading.length <= 1) return
+            val ch = cur.reading.last()
+            cur.reading = cur.reading.substring(0, cur.reading.length - 1)
+            next.reading = ch + next.reading
+        } else return
+
+        // reset candidates for affected segments
+        cur.candidates.clear(); cur.selectedIndex = 0; cur.loading = true
+        next.candidates.clear(); next.selectedIndex = 0; next.loading = true
+        // Immediately reflect UI with placeholder (readings) before async results arrive
+        updateSegmentsUI()
+        updateComposingFromSegments()
+        updateCandidatesUI()
+        loadSegmentCandidates(idx)
+        loadSegmentCandidates(idx + 1)
     }
 
     private fun commitSelectedCandidate() {
         val ic = currentInputConnection ?: return
         if (isInConversion()) {
-            val text = candidates.getOrNull(selectedCandidateIndex) ?: conversionReading!!
-            ic.commitText(text, 1)
+            val segs = segments
+            if (segs != null && segs.isNotEmpty()) {
+                val sb = StringBuilder()
+                for (seg in segs) {
+                    val out = currentSegmentOutput(seg)
+                    sb.append(out)
+                    try { converter.recordSelection(seg.reading, out) } catch (_: Throwable) {}
+                }
+                ic.commitText(sb.toString(), 1)
+            } else {
+                val text = candidates.getOrNull(selectedCandidateIndex) ?: conversionReading!!
+                try {
+                    val reading = conversionReading
+                    if (reading != null) converter.recordSelection(reading, text)
+                } catch (_: Throwable) {}
+                ic.commitText(text, 1)
+            }
             hideCandidatesUI()
             conversionReading = null
+            convQuerySeq++
             candidates = emptyList()
+            segments = null
         }
     }
 
@@ -566,25 +753,93 @@ class JapaneseKeyboardService : InputMethodService() {
         val reading = conversionReading!!
         hideCandidatesUI()
         conversionReading = null
+        convQuerySeq++
         candidates = emptyList()
         romaji.restoreFromKana(reading)
         ic.setComposingText(reading, 1)
     }
 
     private fun showCandidatesUI() {
-        candidateContainer?.visibility = View.VISIBLE
+        candidatesRoot?.visibility = View.VISIBLE
+        updateSegmentsUI()
         updateCandidatesUI()
     }
 
     private fun hideCandidatesUI() {
-        candidateContainer?.visibility = View.GONE
+        candidatesRoot?.visibility = View.GONE
         candidateList?.removeAllViews()
+        segmentList?.removeAllViews()
     }
 
     private fun updateCandidatesUI() {
         val list = candidateList ?: return
         list.removeAllViews()
-        candidates.forEachIndexed { index, cand ->
+        val segs = segments
+        if (isInConversion() && segs != null) {
+            if (segs.isEmpty()) return
+            val focus = segs.getOrNull(segmentFocus) ?: return
+            val cands = if (focus.candidates.isNotEmpty()) focus.candidates else emptyList()
+            if (cands.isEmpty()) {
+                // show loading or reading placeholder
+                val btn = Button(this)
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT
+                )
+                lp.marginEnd = 6
+                btn.layoutParams = lp
+                btn.isEnabled = false
+                btn.text = if (focus.loading) "…" else focus.reading
+                list.addView(btn)
+                return
+            }
+            cands.forEachIndexed { index, cand ->
+                val btn = Button(this)
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT
+                )
+                lp.marginEnd = 6
+                btn.layoutParams = lp
+                btn.text = if (index == focus.selectedIndex) "•$cand" else cand
+                btn.setOnClickListener {
+                    focus.selectedIndex = index
+                    updateSegmentsUI()
+                    updateComposingFromSegments()
+                    // auto-advance to next segment if exists
+                    if (segmentFocus < segs.lastIndex) {
+                        moveSegmentFocus(1)
+                    } else {
+                        updateCandidatesUI()
+                    }
+                }
+                list.addView(btn)
+            }
+        } else {
+            candidates.forEachIndexed { index, cand ->
+                val btn = Button(this)
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT
+                )
+                lp.marginEnd = 6
+                btn.layoutParams = lp
+                btn.text = if (index == selectedCandidateIndex) "•$cand" else cand
+                btn.setOnClickListener {
+                    selectedCandidateIndex = index
+                    commitSelectedCandidate()
+                }
+                list.addView(btn)
+            }
+        }
+    }
+
+    private fun updateSegmentsUI() {
+        val list = segmentList ?: return
+        list.removeAllViews()
+        val segs = segments ?: return
+        segs.forEachIndexed { idx, seg ->
+            val label = currentSegmentOutput(seg)
             val btn = Button(this)
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -592,10 +847,11 @@ class JapaneseKeyboardService : InputMethodService() {
             )
             lp.marginEnd = 6
             btn.layoutParams = lp
-            btn.text = if (index == selectedCandidateIndex) "•$cand" else cand
+            btn.text = if (idx == segmentFocus) "[$label]" else label
             btn.setOnClickListener {
-                selectedCandidateIndex = index
-                commitSelectedCandidate()
+                segmentFocus = idx
+                updateSegmentsUI()
+                loadSegmentCandidates(segmentFocus)
             }
             list.addView(btn)
         }
@@ -610,5 +866,10 @@ class JapaneseKeyboardService : InputMethodService() {
                 v.text = if (i == selectedCandidateIndex) "•$text" else text
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        convExecutor.shutdownNow()
     }
 }

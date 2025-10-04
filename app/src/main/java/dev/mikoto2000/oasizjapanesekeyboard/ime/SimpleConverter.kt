@@ -2,6 +2,8 @@ package dev.mikoto2000.oasizjapanesekeyboard.ime
 
 interface JapaneseConverter {
     fun query(readingHiragana: String): List<String>
+    // Optional: record selection for learning. Default no-op.
+    fun recordSelection(readingHiragana: String, word: String) {}
 }
 
 /**
@@ -40,4 +42,3 @@ class SimpleConverter : JapaneseConverter {
         return sb.toString()
     }
 }
-

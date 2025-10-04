@@ -1,6 +1,21 @@
+import java.nio.charset.StandardCharsets
+import java.net.URLClassLoader as JUrlClassLoader
+import java.sql.DriverManager as JDriverManager
+import java.sql.Statement as JdbcStatement
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+}
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        // Provide SQLite JDBC for build-time DB generation in packSqliteDictionary
+        classpath("org.xerial:sqlite-jdbc:3.45.3.0")
+    }
 }
 
 android {
@@ -88,20 +103,22 @@ tasks.register("generateDictionary") {
             .filter { it.isFile && it.extension.lowercase() == "tsv" }
             .forEach { f ->
                 logger.lifecycle("[generateDictionary] Loading ${f}")
-                f.useLines(Charsets.UTF_8) { seq ->
-                    seq.forEach { line ->
+                f.inputStream().bufferedReader(StandardCharsets.UTF_8).use { br ->
+                    br.lineSequence().forEach { line ->
                         val t = line.trim()
-                        if (t.isEmpty() || t.startsWith("#")) return@forEach
-                        val parts = t.split('\t')
-                        if (parts.size < 2) return@forEach
-                        val readingRaw = parts[0]
-                        val word = parts[1]
-                        val cost = parts.getOrNull(2)?.toIntOrNull() ?: 1000
-                        val reading = katakanaToHiragana(readingRaw)
-                        val byWord = entries.getOrPut(reading) { LinkedHashMap() }
-                        val prev = byWord[word]
-                        if (prev == null || cost < prev) {
-                            byWord[word] = cost
+                        if (t.isNotEmpty() && !t.startsWith("#")) {
+                            val parts = t.split('\t')
+                            if (parts.size >= 2) {
+                                val readingRaw = parts[0]
+                                val word = parts[1]
+                                val cost = parts.getOrNull(2)?.toIntOrNull() ?: 1000
+                                val reading = katakanaToHiragana(readingRaw)
+                                val byWord = entries.getOrPut(reading) { LinkedHashMap() }
+                                val prev = byWord[word]
+                                if (prev == null || cost < prev) {
+                                    byWord[word] = cost
+                                }
+                            }
                         }
                     }
                 }
@@ -111,7 +128,7 @@ tasks.register("generateDictionary") {
 
         val totalKeys = entries.size
         var totalLines = 0
-        outFile.printWriter(Charsets.UTF_8).use { pw ->
+        outFile.printWriter(StandardCharsets.UTF_8).use { pw ->
             val sortedKeys = entries.keys.sorted()
             for (key in sortedKeys) {
                 val items = entries[key]!!.toList().sortedBy { it.second }.take(maxPerKey)
@@ -172,10 +189,12 @@ tasks.register("convertMozcDict") {
 
         fun consumeFile(f: java.io.File) {
             logger.lifecycle("[convertMozcDict] reading ${f}")
-            f.useLines(Charsets.UTF_8) { seq ->
-                seq.forEach { line ->
+            f.inputStream().bufferedReader(StandardCharsets.UTF_8).use { br ->
+                br.lineSequence().forEach { line ->
                     val raw = line.trim()
-                    if (raw.isEmpty() || raw.startsWith("#") || raw.startsWith("//")) return@forEach
+                    if (raw.isEmpty() || raw.startsWith("#") || raw.startsWith("//")) {
+                        // skip
+                    } else {
                     val delim = when {
                         '\t' in raw -> '\t'
                         ',' in raw -> ','
@@ -239,6 +258,7 @@ tasks.register("convertMozcDict") {
                     val r = kataToHira(reading!!)
                     val w = surface!!
                     recs += Rec(r, w, cost)
+                    }
                 }
             }
         }
@@ -274,5 +294,108 @@ tasks.register("convertMozcDict") {
         }
         logger.lifecycle("[convertMozcDict] Wrote ${lines} lines -> ${out}")
         logger.lifecycle("[convertMozcDict] Next: ./gradlew :app:generateDictionary -PdictSrc=${out.parentFile}")
+    }
+}
+
+// --- Pack a prebuilt SQLite dictionary into assets ---
+// Usage:
+//   ./gradlew :app:packSqliteDictionary -Pdb=/path/to/words.db
+tasks.register("packSqliteDictionary") {
+    description = "Copy a prebuilt SQLite dictionary DB into app assets"
+    group = "dictionary"
+    doLast {
+        fun resolvePath(p: String): java.io.File {
+            val f1 = file(p)
+            if (f1.exists()) return f1
+            val f2 = rootProject.file(p)
+            if (f2.exists()) return f2
+            return f1
+        }
+
+        val dbProp = project.findProperty("db")?.toString()
+        val tsvProp = project.findProperty("tsv")?.toString()
+        val dictSrcProp = project.findProperty("dictSrc")?.toString()
+        val out = file("src/main/assets/dictionary/words.db")
+        out.parentFile.mkdirs()
+
+        // Case 1: existing DB provided -> copy as-is
+        if (!dbProp.isNullOrBlank()) {
+            val src = resolvePath(dbProp!!).takeIf { it.exists() } ?: error("DB not found: ${dbProp}")
+            src.inputStream().use { `in` -> out.outputStream().use { outS -> `in`.copyTo(outS) } }
+            logger.lifecycle("[packSqliteDictionary] Copied ${src} -> ${out}")
+            return@doLast
+        }
+
+        // Case 2: create DB (empty or from TSV/dictSrc)
+        try {
+            // Use driver from buildscript classpath
+            Class.forName("org.sqlite.JDBC")
+            val conn = JDriverManager.getConnection("jdbc:sqlite:${out.absolutePath}")
+            conn.createStatement().use { st: JdbcStatement ->
+                st.execute("CREATE TABLE IF NOT EXISTS entries (reading TEXT NOT NULL, word TEXT NOT NULL, cost INTEGER NOT NULL, PRIMARY KEY(reading, word))")
+                st.execute("CREATE INDEX IF NOT EXISTS idx_entries_reading ON entries(reading)")
+            }
+
+            fun kataToHira(s: String): String {
+                val sb = StringBuilder(s.length)
+                for (ch in s) {
+                    if (ch in '\u30A1'..'\u30F6') sb.append(ch - 0x60) else sb.append(ch)
+                }
+                return sb.toString()
+            }
+
+            fun insertFromTsv(tsvFile: java.io.File) {
+                if (!tsvFile.exists()) return
+                logger.lifecycle("[packSqliteDictionary] Loading TSV ${tsvFile}")
+                conn.setAutoCommit(false)
+                val ps = conn.prepareStatement("INSERT OR REPLACE INTO entries(reading, word, cost) VALUES(?,?,?)")
+                var n = 0
+                tsvFile.inputStream().bufferedReader(StandardCharsets.UTF_8).use { br ->
+                    br.lineSequence().forEach { line ->
+                        val t = line.trim()
+                        if (t.isNotEmpty() && !t.startsWith("#")) {
+                            val parts = t.split('\t')
+                            if (parts.size >= 2) {
+                                val reading = kataToHira(parts[0])
+                                val word = parts[1]
+                                val cost = parts.getOrNull(2)?.toIntOrNull() ?: 1000
+                                ps.setString(1, reading)
+                                ps.setString(2, word)
+                                ps.setInt(3, cost)
+                                ps.addBatch()
+                                n++
+                                if (n % 5000 == 0) {
+                                    ps.executeBatch()
+                                    conn.commit()
+                                }
+                            }
+                        }
+                    }
+                }
+                ps.executeBatch()
+                conn.commit()
+                ps.close()
+                logger.lifecycle("[packSqliteDictionary] Inserted ${n} rows from ${tsvFile}")
+            }
+
+            when {
+                !tsvProp.isNullOrBlank() -> insertFromTsv(resolvePath(tsvProp!!))
+                !dictSrcProp.isNullOrBlank() -> {
+                    val dir = resolvePath(dictSrcProp!!)
+                    if (!dir.exists()) error("dictSrc not found: ${dir}")
+                    dir.walkTopDown().filter { it.isFile && it.extension.lowercase() == "tsv" }.forEach { insertFromTsv(it) }
+                }
+                else -> {
+                    // If an existing TSV asset is present, use it
+                    val defaultTsv = rootProject.file("tools/dict-src/mozcdict.tsv")
+                    if (defaultTsv.exists()) insertFromTsv(defaultTsv)
+                }
+            }
+
+            conn.close()
+            logger.lifecycle("[packSqliteDictionary] Created SQLite dictionary -> ${out}")
+        } catch (e: Throwable) {
+            throw RuntimeException("Failed to build SQLite DB. Ensure internet for buildscript to resolve org.xerial:sqlite-jdbc and retry.", e)
+        }
     }
 }

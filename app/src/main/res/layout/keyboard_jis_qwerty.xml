@@ -9,22 +9,64 @@
     android:paddingBottom="4dp"
     android:background="#EFEFEF">
 
-    <!-- Candidate bar (appears during conversion) -->
-    <HorizontalScrollView
-        android:id="@+id/candidate_container"
+    <!-- Candidate area (segments + candidates) -->
+    <LinearLayout
+        android:id="@+id/candidates_root"
         android:layout_width="match_parent"
-        android:layout_height="44dp"
-        android:fillViewport="true"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
         android:visibility="gone"
         android:paddingStart="4dp"
         android:paddingEnd="4dp">
+
+        <!-- Segment row: adjust buttons + chips (horizontal scroll) -->
         <LinearLayout
-            android:id="@+id/candidate_list"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
             android:orientation="horizontal"
-            android:gravity="center_vertical" />
-    </HorizontalScrollView>
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/segment_shrink_right"
+                android:layout_width="40dp"
+                android:layout_height="match_parent"
+                android:text="‹" />
+
+            <HorizontalScrollView
+                android:id="@+id/segment_container"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:fillViewport="true">
+                <LinearLayout
+                    android:id="@+id/segment_list"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical" />
+            </HorizontalScrollView>
+
+            <Button
+                android:id="@+id/segment_expand_right"
+                android:layout_width="40dp"
+                android:layout_height="match_parent"
+                android:text="›" />
+        </LinearLayout>
+
+        <!-- Candidates for the focused segment (horizontal scroll) -->
+        <HorizontalScrollView
+            android:id="@+id/candidate_container"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:fillViewport="true">
+            <LinearLayout
+                android:id="@+id/candidate_list"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center_vertical" />
+        </HorizontalScrollView>
+    </LinearLayout>
 
     <!-- Row 0: Function keys F1..F12 (topmost) -->
     <LinearLayout

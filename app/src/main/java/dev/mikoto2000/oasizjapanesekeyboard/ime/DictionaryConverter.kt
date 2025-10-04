@@ -21,21 +21,35 @@ class DictionaryConverter(
     override fun query(readingHiragana: String): List<String> {
         if (readingHiragana.isEmpty()) return emptyList()
         ensureLoaded()
-        val base = LinkedHashSet<String>()
-        // Always include reading itself and katakana as baseline
-        base += readingHiragana
-        base += hiraganaToKatakana(readingHiragana)
-        // Exact match candidates from dictionary
+        val limit = 50
+        val out = LinkedHashSet<String>()
+        // Baseline: echo reading and katakana
+        out += readingHiragana
+        out += hiraganaToKatakana(readingHiragana)
+        // Exact matches first
         entries[readingHiragana]?.let { list ->
-            val sorted = list.sortedBy { it.second }
-            for ((w, _) in sorted) base += w
+            list.sortedBy { it.second }.forEach { (w, _) ->
+                out += w
+            }
         }
-        // Fallback to SimpleConverter extras for better feel
-        if (base.size < 2) {
-            val extra = SimpleConverter().query(readingHiragana)
-            base.addAll(extra)
+        if (out.size < limit) {
+            val prefix = readingHiragana
+            val grouped = mutableMapOf<String, Int>()
+            // Aggregate min cost per word over all keys starting with prefix (excluding exact key)
+            for ((k, lst) in entries) {
+                if (k == prefix || !k.startsWith(prefix)) continue
+                for ((w, c) in lst) {
+                    val prev = grouped[w]
+                    if (prev == null || c < prev) grouped[w] = c
+                }
+            }
+            grouped.toList().sortedBy { it.second }.forEach { (w, _) ->
+                if (!out.contains(w)) out += w
+                if (out.size >= limit) return out.toList()
+            }
         }
-        return base.toList()
+        if (out.size < 2) out.addAll(SimpleConverter().query(readingHiragana))
+        return out.toList()
     }
 
     private fun ensureLoaded() {
@@ -75,4 +89,3 @@ class DictionaryConverter(
         return sb.toString()
     }
 }
-
