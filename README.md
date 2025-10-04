@@ -14,6 +14,7 @@ Android 向けの日本語フルキーボード（IME）を目指すプロジェ
 - キーリピート（長押しで連続入力。Ctrl/Shift 以外のキーに適用）
 - キー押下フィードバック切替（スペース左の「FX」ボタンで、押下時の色変化のON/OFFを切替）
 - ローマ字かな合成と変換候補バー（「A/あ」ボタンで切替、Spaceで候補展開/循環、Enter/タップで確定）
+- Mozc 辞書由来の変換（Pure Kotlin、TSV 辞書を assets から読み込み）
 
 注意
 - Ctrl 付き KeyEvent を受け取らないアプリもあります。
@@ -32,6 +33,28 @@ Android 向けの日本語フルキーボード（IME）を目指すプロジェ
 ```
 ./gradlew assembleDebug
 ```
+
+辞書生成（実運用向け）
+- 入力: UTF-8 TSV（`読み(ひらがな)\t表記\tコスト(任意)`）ファイル群
+- 置き場所: 既定 `tools/dict-src/`（変更は `-PdictSrc=/path/to/src`）
+- 実行:
+```
+./gradlew :app:generateDictionary -PdictSrc=tools/dict-src -PmaxPerKey=50
+```
+- 出力: `app/src/main/assets/dictionary/words.tsv`
+- 仕様: 全 TSV をマージし (読み,表記) で重複排除。コスト最小を採用。読みはカタカナをひらがなへ正規化。読みごとにコスト昇順で最大 `maxPerKey` 件まで出力。
+
+Mozc テキスト辞書 → 指定TSVへの変換
+- 入力: Mozc系のテキスト辞書（.txt/.tsv/.csv）。行区切りは改行、区切りはタブ/カンマ（自動判定）。
+- 列の想定（自動判定）:
+  - よくある順: `表記, 読み, 品詞, コスト` または `読み, 表記, コスト` または `読み, 表記`
+  - かな判定で「読み」列を推定（ひらがな/カタカナ/ー・・等のみ）。コストは数値列があれば使用、なければ既定 1000。
+- 実行:
+```
+./gradlew :app:convertMozcDict -PmozcSrc=/path/to/mozc_text_dir -Pout=tools/dict-src/mozcdict.tsv
+./gradlew :app:generateDictionary -PdictSrc=tools/dict-src -PmaxPerKey=50
+```
+- 備考: `-PmozcSrc` はファイル/ディレクトリいずれも可。複数ファイルはマージされ、(読み, 表記) で重複排除（最小コスト採用）。
 
 有効化と切替
 - 設定 → システム → 言語と入力 → 画面上のキーボード → キーボードの管理 → OasizJapaneseKeyboard をオン
@@ -62,9 +85,9 @@ Android 向けの日本語フルキーボード（IME）を目指すプロジェ
 - 候補バー、予測変換、辞書連携
 - 視覚スタイル（選択状態の色、角丸、サイズ調整）の改善
   
-フェーズ2（予告）: Mozc 辞書を用いた変換
+Mozc 辞書を用いた変換（導入済み）
 - かな読み（preedit）を Space で候補展開、候補バーから選択確定
-- 実装は Pure Kotlin。Mozc の辞書素データをビルド時に加工し、アプリは assets の TSV/独自バイナリ/SQLite を読み込む方式
+- 実装は Pure Kotlin。Mozc の辞書素データをビルド時に加工し、アプリは assets の TSV（`app/src/main/assets/dictionary/words.tsv`）を読み込み
 
 辞書ファイル（暫定）
 - 位置: `app/src/main/assets/dictionary/words.tsv`
@@ -74,12 +97,16 @@ Android 向けの日本語フルキーボード（IME）を目指すプロジェ
   - `にほん\t日本\t120`
 
 将来の改善
-- Mozc のテキスト辞書からビルド時に自動生成（Gradle タスク化）
 - 大規模辞書では SQLite/メモリマップなどで常時全件ロードを避ける
+- 連接/文節変換（Viterbi）による精度向上、学習の導入
 
 ライセンス
 
 このプロジェクトは MIT License のもとで公開されています。詳細は `LICENSE` を参照してください。
+
+辞書の出典について
+- 本プロジェクトの変換候補は Mozc 由来の辞書データをテキストから変換して利用しています。
+- 元データのライセンス・出典表記が必要な場合があります。配布時は Mozc/Google Japanese Input の NOTICE/第三者ライセンス表記を README やアプリ内に明記してください。
 
 貢献
 
