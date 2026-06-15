@@ -1,5 +1,6 @@
 package dev.mikoto2000.oasizjapanesekeyboard.ime
 
+import android.app.Dialog
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
 import android.os.SystemClock
@@ -8,10 +9,15 @@ import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.widget.Button
 import android.widget.LinearLayout
 import java.util.concurrent.Executors
 import dev.mikoto2000.oasizjapanesekeyboard.R
+
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowCompat
 
 class JapaneseKeyboardService : InputMethodService() {
     private var shiftOn = false
@@ -86,7 +92,13 @@ class JapaneseKeyboardService : InputMethodService() {
 
     override fun onCreate() {
         super.onCreate()
+
         sqliteConverter = try {
+            // For ime do not overlap navigation　bar.
+            val diaWindow = getWindow() ?: return
+            val imeWindow = diaWindow?.getWindow() ?: return
+            WindowCompat.setDecorFitsSystemWindows(imeWindow, false)
+
             SqliteDictionaryConverter(this).also { converter ->
                 convExecutor.execute {
                     try {
@@ -280,6 +292,13 @@ class JapaneseKeyboardService : InputMethodService() {
         }
         root.findViewById<Button>(R.id.segment_expand_right)?.setOnClickListener {
             adjustBoundaryRight(1)
+        }
+
+        // For ime do not overlap navigation　bar.
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, windowInsets ->
+            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
+            view.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+            WindowInsetsCompat.CONSUMED
         }
 
         // Apply initial backgrounds to all keys
