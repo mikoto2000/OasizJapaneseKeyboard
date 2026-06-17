@@ -93,6 +93,11 @@ class RomajiConverter {
         consume()
     }
 
+    fun pushKanaChar(str: String) {
+        buffer.append(str)
+        consume()
+    }
+
     fun backspace() {
         if (buffer.isNotEmpty()) {
             buffer.deleteCharAt(buffer.lastIndex)

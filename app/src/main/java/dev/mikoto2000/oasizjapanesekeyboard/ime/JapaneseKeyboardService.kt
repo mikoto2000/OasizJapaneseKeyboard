@@ -1,6 +1,5 @@
 package dev.mikoto2000.oasizjapanesekeyboard.ime
 
-import android.app.Dialog
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
 import android.os.SystemClock
@@ -9,7 +8,6 @@ import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.Window
 import android.widget.Button
 import android.widget.LinearLayout
 import java.util.concurrent.Executors
@@ -35,7 +33,14 @@ class JapaneseKeyboardService : InputMethodService() {
     private var fnVisible = true
 
     // Kana composing state
-    private var kanaMode = false // default: ASCII mode
+    private val   MODE_ASCII    = 0
+    private val   MODE_ROMA     = 1
+    private val   MODE_HIRAGANA = 2
+    private val   MODE_KATAKANA = 3
+    private val   MODE_MAXNUM  = 4
+    private val   MODE_DSPTXT = arrayOf("ABC","ﾛｰﾏ字","かな","カナ"," ")
+    private var inputMode = MODE_ASCII // default: ASCII mode
+
     private val romaji = RomajiConverter()
 
     // Conversion (candidates) state
@@ -90,6 +95,57 @@ class JapaneseKeyboardService : InputMethodService() {
         "\\" to "_"
     )
 
+    private val engToHiraganaMap: Map<Int, String> = mapOf(
+        // 0 to 9
+        R.id.key_1 to "ぬ",
+        R.id.key_2 to "ふ",
+        R.id.key_3 to "あ",
+        R.id.key_4 to "う",
+        R.id.key_5 to "え",
+        R.id.key_6 to "お",
+        R.id.key_7 to "や",
+        R.id.key_8 to "ゆ",
+        R.id.key_9 to "よ",
+        R.id.key_0 to "わ",
+        // a to z
+        R.id.key_a to "ち",
+        R.id.key_b to "こ",
+        R.id.key_c to "そ",
+        R.id.key_d to "し",
+        R.id.key_e to "い",
+        R.id.key_f to "は",
+        R.id.key_g to "き",
+        R.id.key_h to "く",
+        R.id.key_i to "に",
+        R.id.key_j to "ま",
+        R.id.key_k to "の",
+        R.id.key_l to "り",
+        R.id.key_m to "も",
+        R.id.key_n to "み",
+        R.id.key_o to "ら",
+        R.id.key_p to "せ",
+        R.id.key_q to "た",
+        R.id.key_r to "す",
+        R.id.key_s to "と",
+        R.id.key_t to "か",
+        R.id.key_u to "な",
+        R.id.key_v to "ひ",
+        R.id.key_w to "て",
+        R.id.key_x to "さ",
+        R.id.key_y to "ん",
+        R.id.key_z to "つ",
+        // other
+        R.id.key_hyphen        to "ほ",
+        R.id.key_yama          to "へ",
+        R.id.key_semicolon     to "れ",
+        R.id.key_colon         to "け",
+        R.id.key_r_kakukakko   to "む",
+        R.id.key_comma         to "ね",
+        R.id.key_pochi         to "る",
+        R.id.key_slash         to "め",
+        R.id.key_slash         to "ろ",
+    )
+
     override fun onCreate() {
         super.onCreate()
 
@@ -141,7 +197,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
         root.findViewById<View>(R.id.key_space)?.let { v ->
             setRepeatableKey(v, initialDelay = 400L, repeatInterval = 150L) {
-                if (kanaMode) {
+                if (inputMode == MODE_ROMA ) {
                     if (isInConversion()) {
                         val segs = segments
                         if (segs != null && segs.isNotEmpty()) {
@@ -172,7 +228,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
         shiftBtn = root.findViewById<Button>(R.id.key_shift)
         shiftBtn?.setOnClickListener {
-            if (!kanaMode) {
+            if (inputMode == MODE_ASCII) {
                 shiftOn = !shiftOn
                 updateShiftUI()
             }
@@ -181,7 +237,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
         shiftBtnRight = root.findViewById<Button>(R.id.key_shift_right)
         shiftBtnRight?.setOnClickListener {
-            if (!kanaMode) {
+            if (inputMode == MODE_ASCII) {
                 shiftOn = !shiftOn
                 updateShiftUI()
             }
@@ -189,7 +245,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
         ctrlBtn = root.findViewById<Button>(R.id.key_ctrl)
         ctrlBtn?.setOnClickListener {
-            if (!kanaMode) {
+            if (inputMode == MODE_ASCII) {
                 ctrlOn = !ctrlOn
                 updateCtrlUI()
             }
@@ -206,7 +262,7 @@ class JapaneseKeyboardService : InputMethodService() {
         // Arrow keys (repeat enabled)
         root.findViewById<View>(R.id.key_arrow_left)?.let { v ->
             setRepeatableKey(v) {
-                if (kanaMode && isInConversion() && segments != null) {
+                if (inputMode == MODE_ROMA && isInConversion() && segments != null) {
                     moveSegmentFocus(-1)
                 } else {
                     flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_LEFT); consumeOneShotModifiers()
@@ -215,7 +271,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
         root.findViewById<View>(R.id.key_arrow_right)?.let { v ->
             setRepeatableKey(v) {
-                if (kanaMode && isInConversion() && segments != null) {
+                if (inputMode == MODE_ROMA && isInConversion() && segments != null) {
                     moveSegmentFocus(1)
                 } else {
                     flushComposingOrConversionIfNeeded(); sendDpad(KeyEvent.KEYCODE_DPAD_RIGHT); consumeOneShotModifiers()
@@ -323,9 +379,13 @@ class JapaneseKeyboardService : InputMethodService() {
                     letterButtons.add(view)
                     // Initial label based on shift state
                     view.text = if (shiftOn) base.uppercase() else base.lowercase()
+                    //---------- Key input event start ----------------
                     setRepeatableKey(view) {
-                        if (kanaMode) {
-                            handleKanaLetter(base)
+                        if (inputMode == MODE_ROMA) {
+                            handleRomaKanaLetter(base)
+                        }
+                        else if (inputMode == MODE_HIRAGANA) {
+                            handleHiraganaLetter(view)
                         } else {
                             val text = if (shiftOn) base.uppercase() else base.lowercase()
                             if (ctrlOn) {
@@ -337,6 +397,7 @@ class JapaneseKeyboardService : InputMethodService() {
                             consumeOneShotModifiers()
                         }
                     }
+                    //---------- Key input event end ----------------
                 }
                 tag.startsWith("symbol:") -> {
                     val base = tag.removePrefix("symbol:")
@@ -344,14 +405,21 @@ class JapaneseKeyboardService : InputMethodService() {
                     // Initial label reflects current shift state
                     val label = if (shiftOn) shiftSymbolMap[base] ?: base else base
                     view.text = label
+                    //---------- Key input event start ----------------
                     setRepeatableKey(view) {
-                        val out = if (shiftOn) shiftSymbolMap[base] ?: base else base
-                        if (kanaMode) {
-                            flushComposingOrConversionIfNeeded()
+                        if (inputMode == MODE_HIRAGANA) {
+                            handleHiraganaLetter(view)
                         }
-                        commitText(out)
-                        if (!kanaMode) consumeOneShotModifiers()
+                        else {
+                            val out = if (shiftOn) shiftSymbolMap[base] ?: base else base
+                            if (inputMode == MODE_ROMA) {
+                                flushComposingOrConversionIfNeeded()
+                            }
+                            commitText(out)
+                            if (inputMode == MODE_ASCII) consumeOneShotModifiers()
+                        }
                     }
+                    //---------- Key input event end ----------------
                 }
             }
         }
@@ -383,8 +451,14 @@ class JapaneseKeyboardService : InputMethodService() {
         ctrlBtn?.let { btn ->
             btn.text = if (ctrlOn) "Ctrl ON" else "Ctrl"
             btn.isSelected = ctrlOn
-            btn.isEnabled = !kanaMode
-            btn.alpha = if (kanaMode) 0.5f else 1.0f
+            var mode = false
+            var alpha = 0.5f
+            if (inputMode == MODE_ASCII) {
+                mode = true
+                alpha = 1.0f
+            }
+            btn.isEnabled = true
+            btn.alpha = 1.0f
         }
     }
 
@@ -519,7 +593,7 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     private fun deleteText() {
-        if (kanaMode) {
+        if (inputMode == MODE_ROMA) {
             if (isInConversion()) {
                 cancelConversionRestore()
                 return
@@ -535,7 +609,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
     private fun sendEnter() {
         val ic = currentInputConnection ?: return
-        if (kanaMode) {
+        if (inputMode == MODE_ROMA) {
             if (isInConversion()) {
                 commitSelectedCandidate()
                 return
@@ -551,36 +625,69 @@ class JapaneseKeyboardService : InputMethodService() {
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
     }
 
+    private fun changeToHiraganaKeyboard() {
+        for ( rec in engToHiraganaMap) {
+            val btn = rootViewRef?.findViewById<Button>(rec.key)
+            if ( btn != null ) {
+                btn.text = rec.value
+            }
+         }
+    }
+
+    private fun changeToKatakanaKeyboard() {
+    }
+
+    private fun changeToEngilshKeyboard() {
+    }
     private fun updateLangToggleUI() {
         langBtn?.let { btn ->
-            btn.text = if (kanaMode) "あ" else "A"
+            btn.text = MODE_DSPTXT[inputMode]
             // Disable shift while in kana mode
-            shiftBtn?.isEnabled = !kanaMode
-            shiftBtnRight?.isEnabled = !kanaMode
-            val alpha = if (kanaMode) 0.5f else 1.0f
+            var mode = false
+            var alpha = 0.5f
+            if (inputMode == MODE_ASCII) {
+                mode    = true
+                alpha   = 1.0f
+            }
+            shiftBtn?.isEnabled = mode
+            shiftBtnRight?.isEnabled = mode
             shiftBtn?.alpha = alpha
             shiftBtnRight?.alpha = alpha
             updateShiftUI()
             updateCtrlUI()
-            if (!kanaMode) {
-                // Ensure composing cleared when leaving kana mode
-                if (isInConversion()) {
-                    // commit selected before leaving kana mode
-                    commitSelectedCandidate()
-                } else {
-                    if (romaji.hasComposing()) {
-                        currentInputConnection?.finishComposingText()
+
+            if (inputMode == MODE_HIRAGANA) {
+                changeToHiraganaKeyboard()
+            }
+            else if (inputMode == MODE_KATAKANA) {
+                changeToKatakanaKeyboard()
+            }
+            else {
+                changeToEngilshKeyboard()
+
+                if (inputMode == MODE_ASCII) {
+                    // Ensure composing cleared when leaving kana mode
+                    if (isInConversion()) {
+                        // commit selected before leaving kana mode
+                        commitSelectedCandidate()
+                    } else {
+                        if (romaji.hasComposing()) {
+                            currentInputConnection?.finishComposingText()
+                        }
+                        romaji.clear()
                     }
-                    romaji.clear()
+                    // Invalidate any in-flight conversion queries
+                    convQuerySeq++
                 }
-                // Invalidate any in-flight conversion queries
-                convQuerySeq++
             }
         }
     }
 
     private fun toggleKanaMode() {
-        kanaMode = !kanaMode
+        inputMode ++
+        if (inputMode >= MODE_MAXNUM) {
+            inputMode = MODE_ASCII
+        }
         updateLangToggleUI()
     }
 
@@ -600,7 +707,7 @@ class JapaneseKeyboardService : InputMethodService() {
         ic.setComposingText(out, 1)
     }
 
-    private fun handleKanaLetter(base: String) {
+    private fun handleRomaKanaLetter(base: String) {
         if (base.isEmpty()) return
         if (isInConversion()) {
             // typing while selecting: cancel conversion and restore reading to composing
@@ -611,8 +718,18 @@ class JapaneseKeyboardService : InputMethodService() {
         updateComposingText()
     }
 
+    private fun handleHiraganaLetter(base: Button) {
+        if (isInConversion()) {
+            // typing while selecting: cancel conversion and restore reading to composing
+            cancelConversionRestore()
+        }
+        val text = base.text.toString()
+        romaji.pushKanaChar(text)
+        updateComposingText()
+    }
+
     private fun flushComposingIfNeeded() {
-        if (!kanaMode) return
+        if (inputMode != MODE_ASCII) return
         if (romaji.hasComposing()) {
             val ic = currentInputConnection ?: return
             val text = romaji.flush()
@@ -622,7 +739,7 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     private fun flushComposingOrConversionIfNeeded() {
-        if (!kanaMode) return
+        if (inputMode != MODE_ASCII) return
         if (isInConversion()) {
             commitSelectedCandidate()
         } else {
