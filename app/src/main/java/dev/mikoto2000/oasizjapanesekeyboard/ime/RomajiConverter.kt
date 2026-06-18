@@ -79,6 +79,42 @@ class RomajiConverter {
         "xa" to "ぁ", "xi" to "ぃ", "xu" to "ぅ", "xe" to "ぇ", "xo" to "ぉ"
     )
 
+    data class dakutenToMoji (
+        var  seion : String,    // ex) た
+        var  dakuon : String    // ex) だ
+    )
+
+    private val dakutenToMojiMap = arrayOf(
+        dakutenToMoji( "か", "が" ),
+        dakutenToMoji( "き", "ぎ" ),
+        dakutenToMoji( "く", "ぐ" ),
+        dakutenToMoji( "け", "げ" ),
+        dakutenToMoji( "こ", "ご" ),
+        dakutenToMoji( "さ", "ざ" ),
+        dakutenToMoji( "し", "じ" ),
+        dakutenToMoji( "す", "ず" ),
+        dakutenToMoji( "せ", "ぜ" ),
+        dakutenToMoji( "そ", "ぞ" ),
+        dakutenToMoji( "た", "だ" ),
+        dakutenToMoji( "ち", "ぢ" ),
+        dakutenToMoji( "つ", "づ" ),
+        dakutenToMoji( "て", "で" ),
+        dakutenToMoji( "と", "ど" ),
+        dakutenToMoji( "は", "ば" ),
+        dakutenToMoji( "ひ", "び" ),
+        dakutenToMoji( "ふ", "ぶ" ),
+        dakutenToMoji( "へ", "べ" ),
+        dakutenToMoji( "ほ", "ぼ" ),
+    )
+
+    private val handakutenToMojiMap = arrayOf(
+        dakutenToMoji( "は", "ぱ" ),
+        dakutenToMoji( "ひ", "ぴ" ),
+        dakutenToMoji( "ふ", "ぷ" ),
+        dakutenToMoji( "へ", "ぺ" ),
+        dakutenToMoji( "ほ", "ぽ" ),
+    )
+
     fun clear() {
         produced.clear()
         buffer.clear()
@@ -90,12 +126,35 @@ class RomajiConverter {
         val ch = c.lowercaseChar()
         if (ch !in 'a'..'z') return // ignore non-letters here
         buffer.append(ch)
-        consume()
+        consume()   // Alphabets convert to kana.
     }
 
     fun pushKanaChar(str: String) {
-        buffer.append(str)
-        consume()
+        if ( buffer.isNotEmpty() ) {
+            val keyMap : Array<dakutenToMoji>
+
+            if ( str == "゛" ) {
+                keyMap = dakutenToMojiMap.copyOf()
+            }
+            else if ( str == "゜" ) {
+                keyMap = handakutenToMojiMap.copyOf()
+            }
+            else {  // No replace
+                buffer.append(str)  // case: no dakuon at second KANA onword
+                return
+            }
+
+            for( rec in keyMap ) {
+                val seion = buffer.get(buffer.lastIndex).toString()
+                if ( seion == rec.seion ) {  // find dakuon-go
+                    buffer.deleteCharAt(buffer.lastIndex)   // delete seion
+                    buffer.append(rec.dakuon)               // replace seion to dakuon
+                    return
+                }
+            }
+        }
+
+        buffer.append(str)  // case: no dakuon at first KANA, umtach dakuon
     }
 
     fun backspace() {
