@@ -3,9 +3,11 @@ package dev.mikoto2000.oasizjapanesekeyboard
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import android.view.View
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import android.widget.Button
+import android.widget.TextView
 import android.content.Intent
 import dev.mikoto2000.oasizjapanesekeyboard.ui.LicenseActivity
 
@@ -23,5 +25,13 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_open_licenses)?.setOnClickListener {
             startActivity(Intent(this, LicenseActivity::class.java))
         }
+
+        findViewById<TextView>(R.id.txtDescription)?.text =
+        "PCのキーボートレイアウトで文字入力が可能なソフトウェアキーボードです。\n" +
+        "以下のモードとレイアウトがあります。\n" +
+        "- 英数字キーボード + 英数字入力。\n" +
+        "- 英数字キーボード + ローマ字入力。\n" +
+        "- ひらがなキーボード + かな入力。\n" +
+        "- カタカナキーボード + カタカナ入力。\n"
     }
 }
