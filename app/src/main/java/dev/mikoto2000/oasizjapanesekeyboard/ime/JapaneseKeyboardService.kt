@@ -8,6 +8,7 @@
 
 package dev.mikoto2000.oasizjapanesekeyboard.ime
 
+import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
 import android.os.SystemClock
@@ -18,19 +19,22 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import android.text.format.Time;    // NOTE: Warining <<-- 'class Time : Any' is deprecated. Deprecated in Java.
 import java.util.concurrent.Executors
 import dev.mikoto2000.oasizjapanesekeyboard.R
+import dev.mikoto2000.oasizjapanesekeyboard.MainActivity
 
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowCompat
 import kotlin.arrayOf
-import android.graphics.Typeface
 import android.graphics.Color
 import android.content.res.ColorStateList
 
 class JapaneseKeyboardService : InputMethodService() {
     private var shiftOn = false
+    private var shiftLock = false
+    private var shiftLockAfterSoon = false
     private var ctrlOn = false
     private var shiftBtn: Button? = null
     private var shiftBtnRight: Button? = null
@@ -67,6 +71,7 @@ class JapaneseKeyboardService : InputMethodService() {
     private val convExecutor = Executors.newSingleThreadExecutor()
     private var convQuerySeq: Long = 0L
     private var sqliteConverter: SqliteDictionaryConverter? = null
+    private  var longPressStarTime : Long = 0L
 
     // Segment conversion state
     private data class Segment(
@@ -226,8 +231,9 @@ class JapaneseKeyboardService : InputMethodService() {
         wireKeysRecursively(root)
 
         // Special keys (repeat enabled)
+        // Remark: setRepeatableKey is original API.
         root.findViewById<View>(R.id.key_backspace)?.let { v ->
-            setRepeatableKey(v, initialDelay = 350L, repeatInterval = 60L) {
+            setRepeatableKey(v, initialDelay= 350L, repeatInterval = 60L) {
                 deleteText()
                 consumeOneShotModifiers()
             }
@@ -272,18 +278,43 @@ class JapaneseKeyboardService : InputMethodService() {
         }
 
         shiftBtn = root.findViewById<Button>(R.id.key_shift)
+        // Normal Press
         shiftBtn?.setOnClickListener {
-            changeShiftMode()
-            updateShiftUIALLMode()
-            updateShiftUI()
+            if ( ! shiftLock ) {
+                changeShiftMode()
+                updateShiftUIALLMode()
+                updateShiftUI()
+            }
         }
+        // Long Press
+        // Remark: setOnLongClickListener is timeout 500msec fixed...
+        shiftBtn?.let { v ->
+            setImeLongPressKey( v ) {
+                changeShiftLockMode()   // Must call first
+                changeShiftMode()       // Must call after
+                updateShiftUIALLMode()
+                updateShiftUI()
+            }
+        }
+
         updateShiftUI()     // NOTE: Changing of keyboard may not nessary in this case.
 
         shiftBtnRight = root.findViewById<Button>(R.id.key_shift_right)
         shiftBtnRight?.setOnClickListener {
-            changeShiftMode()
-            updateShiftUIALLMode()
-            updateShiftUI()
+            if ( ! shiftLock ) {
+                changeShiftMode()
+                updateShiftUIALLMode()
+                updateShiftUI()
+            }
+        }
+        // Long Press
+        shiftBtnRight?.let { v ->
+            setImeLongPressKey( v ) {
+                changeShiftLockMode()   // Must call first
+                changeShiftMode()       // Must call after
+                updateShiftUIALLMode()
+                updateShiftUI()
+            }
         }
 
         ctrlBtn = root.findViewById<Button>(R.id.key_ctrl)
@@ -303,6 +334,7 @@ class JapaneseKeyboardService : InputMethodService() {
         updateLangToggleUI()
 
         // Arrow keys (repeat enabled)
+        // Remark: setRepeatableKey is original API.
         root.findViewById<View>(R.id.key_arrow_left)?.let { v ->
             setRepeatableKey(v) {
                 if ( isNeedConvertKanji() && isInConversion() && segments != null ) {
@@ -334,6 +366,15 @@ class JapaneseKeyboardService : InputMethodService() {
         }
         root.findViewById<View>(R.id.key_tab)?.let { v ->
             setRepeatableKey(v) { flushComposingOrConversionIfNeeded(); sendSimpleKey(KeyEvent.KEYCODE_TAB); consumeOneShotModifiers() }
+        }
+
+        // help view
+        root.findViewById<Button>(R.id.key_help)?.let { btn ->
+            btn.setOnClickListener {
+                var intentHelp : Intent = Intent( getApplication(), MainActivity::class.java)
+                intentHelp.addFlags( Intent.FLAG_ACTIVITY_NEW_TASK );
+                startActivity( intentHelp )
+            }
         }
 
         // Function keys F1..F12 (repeat enabled)
@@ -409,9 +450,18 @@ class JapaneseKeyboardService : InputMethodService() {
 
     private fun changeShiftMode() {
         if ( isNeedShiftKey() ) {
+            // Do not check condidion of shitfLock hear.
+            // Check condidion of shitfLock in only consumeOneShotModifiers().
             shiftOn = !shiftOn
         }
     }
+
+    private fun changeShiftLockMode() {
+        if ( isNeedShiftKey()) {
+            shiftLock = !shiftLock
+        }
+    }
+
     private fun updateShiftUIALLMode() {
         if (inputMode == MODE_ASCII) {
             updateShiftEnglishKeyboard()
@@ -524,37 +574,44 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
-    private fun changeOnColorButton(btn : Button, state :Boolean) {
-        var textColor1 = Color.rgb(255,255,255)  // Withe
-        var textColor2 = Color.rgb(0,0,0)  // black
-        var backColor = Color.rgb(0,0,255)  // Blue
+    private fun changeOnColorButton(btn : Button, onState :Boolean, lockState : Boolean = false) {
+        var onColor     = Color.rgb(10,10,10) /*Deep gray*/
+        var lockColor   = Color.rgb(255,0,0) /*red*/
+        var textColor1  = Color.rgb(255,255,255)  /* Withe */
+        var textColor2  = Color.rgb(0,0,0)  /* black */
 
-        if (state) {
-            // btn.setTypeface(null, 1 /*Bold*/);
+        if ( lockState ) {
+            btn.setTypeface(null, 1 /*Bold*/);
             btn.setTextColor( textColor1 )
-            btn.setBackgroundTintList( ColorStateList.valueOf( backColor ) );
+            btn.setBackgroundTintList( ColorStateList.valueOf( lockColor ) );
+        }
+        else if ( onState ) {
+            btn.setTypeface(null, 0 /*Bold*/);
+            btn.setTextColor( textColor1 )
+            btn.setBackgroundTintList( ColorStateList.valueOf( onColor ) );
         }
         else {
-            // btn.setTypeface(null, 0 /*Bold*/);
+            btn.setTypeface(null, 0 /*Bold*/);
             btn.setTextColor( textColor2 )
             btn.setBackgroundTintList( ColorStateList.valueOf( textColor1 ) );
         }
     }
+
     private fun updateShiftUI() {
         val active = shiftOn
         shiftBtn?.let { btn ->
-            changeOnColorButton(btn, active)
+            changeOnColorButton(btn, active, shiftLock)
             btn.isSelected = active
         }
         shiftBtnRight?.let { btn ->
-            changeOnColorButton(btn, active)
+            changeOnColorButton(btn, active, shiftLock)
             btn.isSelected = active
         }
     }
 
     private fun updateCtrlUI() {
         ctrlBtn?.let { btn ->
-            btn.text = if (ctrlOn) "Ctrl ON" else "Ctrl"
+            changeOnColorButton(btn, ctrlOn)
             btn.isSelected = ctrlOn
             var mode = false
             var alpha = 0.5f
@@ -588,16 +645,19 @@ class JapaneseKeyboardService : InputMethodService() {
         ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0))
     }
 
+    // This founction set to whether any button filled backcolor.
     private fun updateFeedbackToggleUI(btn: Button) {
-        btn.text = if (feedbackEnabled) "FX ON" else "FX OFF"
+        changeOnColorButton(btn, feedbackEnabled)
         btn.isSelected = feedbackEnabled
     }
 
+    // This founction set to whether any button filled backcolor.
     private fun applyKeyBackgrounds() {
         val root = rootViewRef as? ViewGroup ?: return
         applyKeyBackgroundsRec(root)
     }
 
+    // This founction set to whether any button filled backcolor.
     private fun applyKeyBackgroundsRec(view: View) {
         if (view is ViewGroup) {
             for (i in 0 until view.childCount) {
@@ -612,13 +672,16 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     private fun updateFnToggleUI(btn: Button) {
-        btn.text = if (fnVisible) "Fn ON" else "Fn OFF"
+        changeOnColorButton(btn, fnVisible)
         btn.isSelected = fnVisible
     }
 
     private fun consumeOneShotModifiers() {
         var changed = false
-        if (shiftOn) { shiftOn = false; changed = true }
+        if (shiftOn == true && shiftLock == false ) {
+            shiftOn = false;
+            changed = true
+        }
         if (ctrlOn) { ctrlOn = false; changed = true }
         if (changed) {
             updateShiftUIALLMode()
@@ -658,6 +721,34 @@ class JapaneseKeyboardService : InputMethodService() {
                 else -> false
             }
         }
+    }
+
+    private fun setImeLongPressKey(
+        view: View,
+        waittime: Long = 1500L,
+        action: () -> Unit
+    ) {
+        view.setOnTouchListener { v, ev ->
+            /* NOTE: There are 6 warning error in this function. */
+                when (ev.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        var nowTime = android.text.format.Time("Asia/Tokyo") // <<--  'constructor(p0: String!): Time' is deprecated. Deprecated in Java.
+                        nowTime?.setToNow()                 // <<-- 'fun setToNow(): Unit' is deprecated. Deprecated in Java.
+                        longPressStarTime = nowTime.toMillis(false)     // <<-- 'fun toMillis(p0: Boolean): Long' is deprecated. Deprecated in Java.
+                        false // if set to true, do not occure click enent.
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        var nowTime = android.text.format.Time("Asia/Tokyo") // <<--  'constructor(p0: String!): Time' is deprecated. Deprecated in Java.
+                        nowTime?.setToNow()                 // <<-- 'fun setToNow(): Unit' is deprecated. Deprecated in Java.
+                        val diff = nowTime.toMillis(false) - longPressStarTime   // <<-- 'fun toMillis(p0: Boolean): Long' is deprecated. Deprecated in Java.
+                        if ( diff > waittime )  {
+                            action()
+                        }
+                        false // if set to true, do not occure click enent.
+                    }
+                    else -> false
+                }
+            }
     }
 
     // One-shot and lock behavior removed; simple toggle with click.
