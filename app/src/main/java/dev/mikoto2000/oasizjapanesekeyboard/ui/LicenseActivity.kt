@@ -1,3 +1,10 @@
+/*
+    All Rights Reserved, Copyright (C) 2025, mikoto2000
+      Licensed Material of mikoto2000.
+
+    All Rights Reserved, Copyright (C) 2026, Moto+4 Applications LLC
+      Licensed Material of Moto+4 Applications LLC.
+ */
 package dev.mikoto2000.oasizjapanesekeyboard.ui
 
 import android.os.Bundle
@@ -17,8 +24,9 @@ class LicenseActivity : AppCompatActivity() {
 
     private fun buildText(): CharSequence {
         val parts = listOf(
+            "licenses/LICENSE_developer.txt" to "Developers of this application",
             "licenses/LICENSE_mozc.txt" to "Mozc License (BSD 3-Clause)",
-            "licenses/NOTICE_mozc.txt" to "Mozc Third-Party Notices"
+            "licenses/NOTICE_mozc.txt" to "Mozc Third-Party Notices",
         )
         val sb = StringBuilder()
         for ((path, header) in parts) {
