@@ -1,3 +1,11 @@
+/*
+    All Rights Reserved, Copyright (C) 2025, mikoto2000
+      Licensed Material of mikoto2000.
+
+    All Rights Reserved, Copyright (C) 2026, Moto+4 Applications LLC
+      Licensed Material of Moto+4 Applications LLC.
+ */
+
 package dev.mikoto2000.oasizjapanesekeyboard.ime
 
 /**

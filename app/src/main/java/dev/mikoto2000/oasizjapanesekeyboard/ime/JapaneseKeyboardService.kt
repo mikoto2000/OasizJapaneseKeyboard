@@ -1,3 +1,11 @@
+/*
+    All Rights Reserved, Copyright (C) 2025, mikoto2000
+      Licensed Material of mikoto2000.
+
+    All Rights Reserved, Copyright (C) 2026, Moto+4 Applications LLC
+      Licensed Material of Moto+4 Applications LLC.
+ */
+
 package dev.mikoto2000.oasizjapanesekeyboard.ime
 
 import android.inputmethodservice.InputMethodService
@@ -114,7 +122,6 @@ class JapaneseKeyboardService : InputMethodService() {
         keyCodeToMoji( R.id.key_b, "こ" ),
         keyCodeToMoji( R.id.key_c, "そ" ),
         keyCodeToMoji( R.id.key_d, "し" ),
-        keyCodeToMoji( R.id.key_e, "い" ),
         keyCodeToMoji( R.id.key_f, "は" ),
         keyCodeToMoji( R.id.key_g, "き" ),
         keyCodeToMoji( R.id.key_h, "く" ),
@@ -135,9 +142,9 @@ class JapaneseKeyboardService : InputMethodService() {
         keyCodeToMoji( R.id.key_w, "て" ),
         keyCodeToMoji( R.id.key_x, "さ" ),
         keyCodeToMoji( R.id.key_y, "ん" ),
-        keyCodeToMoji( R.id.key_z, "つ" ),
         // other
         keyCodeToMoji( R.id.key_hyphen     , "ほ" ),
+        keyCodeToMoji( R.id.key_ensign     , "ー" ),
         keyCodeToMoji( R.id.key_yama       , "へ" ),
         keyCodeToMoji( R.id.key_semicolon  , "れ" ),
         keyCodeToMoji( R.id.key_colon      , "け" ),
@@ -158,6 +165,8 @@ class JapaneseKeyboardService : InputMethodService() {
         keyCodeToMoji( R.id.key_8, "ゆ" ),
         keyCodeToMoji( R.id.key_9, "よ" ),
         keyCodeToMoji( R.id.key_0, "わ" ),
+        keyCodeToMoji( R.id.key_e, "い" ),
+        keyCodeToMoji( R.id.key_z, "つ" ),
         keyCodeToMoji( R.id.key_comma      , "ね" ),
         keyCodeToMoji( R.id.key_pochi      , "る" ),
         keyCodeToMoji( R.id.key_slash      , "め" ),
@@ -173,6 +182,8 @@ class JapaneseKeyboardService : InputMethodService() {
         keyCodeToMoji( R.id.key_8,      "ゅ" ),
         keyCodeToMoji( R.id.key_9,      "ょ" ),
         keyCodeToMoji( R.id.key_0,      "を" ),
+        keyCodeToMoji( R.id.key_e,      "ぃ" ),
+        keyCodeToMoji( R.id.key_z,      "っ" ),
         keyCodeToMoji( R.id.key_comma,  "、" ),
         keyCodeToMoji( R.id.key_pochi,  "。" ),
         keyCodeToMoji( R.id.key_slash,  "・" ),
@@ -262,13 +273,17 @@ class JapaneseKeyboardService : InputMethodService() {
 
         shiftBtn = root.findViewById<Button>(R.id.key_shift)
         shiftBtn?.setOnClickListener {
-            updateShitfUIALLMode()
+            changeShiftMode()
+            updateShiftUIALLMode()
+            updateShiftUI()
         }
         updateShiftUI()     // NOTE: Changing of keyboard may not nessary in this case.
 
         shiftBtnRight = root.findViewById<Button>(R.id.key_shift_right)
         shiftBtnRight?.setOnClickListener {
-            updateShitfUIALLMode()
+            changeShiftMode()
+            updateShiftUIALLMode()
+            updateShiftUI()
         }
 
         ctrlBtn = root.findViewById<Button>(R.id.key_ctrl)
@@ -392,20 +407,29 @@ class JapaneseKeyboardService : InputMethodService() {
         return root
     }
 
-    private fun updateShitfUIALLMode() {
-        if (inputMode == MODE_ASCII) {
+    private fun changeShiftMode() {
+        if ( isNeedShiftKey() ) {
             shiftOn = !shiftOn
+        }
+    }
+    private fun updateShiftUIALLMode() {
+        if (inputMode == MODE_ASCII) {
             updateShiftEnglishKeyboard()
         } else if (inputMode == MODE_HIRAGANA) {
-            shiftOn = !shiftOn
-            updateShitfHiraganaKeyboard()
+            updateShiftHiraganaKeyboard()
         }
-        updateShiftUI()
     }
 
     // Is it mode need to convert to KANJI.
     private fun isNeedConvertKanji() : Boolean  {
-        if ( inputMode == MODE_ROMA ) return true
+        if ( inputMode == MODE_ROMA     ) return true
+        if ( inputMode == MODE_HIRAGANA ) return true
+        return false
+    }
+
+    private fun isNeedShiftKey() : Boolean  {
+        if ( inputMode == MODE_ASCII    ) return true
+        if ( inputMode == MODE_ROMA     ) return true
         if ( inputMode == MODE_HIRAGANA ) return true
         return false
     }
@@ -441,8 +465,8 @@ class JapaneseKeyboardService : InputMethodService() {
                             } else {
                                 commitText(text)
                             }
-                            consumeOneShotModifiers()
                         }
+                        if ( isNeedShiftKey() ) consumeOneShotModifiers()
                     }
                     //---------- Key input event end ----------------
                 }
@@ -467,8 +491,8 @@ class JapaneseKeyboardService : InputMethodService() {
                                 flushComposingOrConversionIfNeeded()
                             }
                             commitText(out)
-                            if (inputMode == MODE_ASCII) consumeOneShotModifiers()
                         }
+                        if ( isNeedShiftKey() ) consumeOneShotModifiers()
                     }
                     //---------- Key input event end ----------------
                 }
@@ -597,7 +621,8 @@ class JapaneseKeyboardService : InputMethodService() {
         if (shiftOn) { shiftOn = false; changed = true }
         if (ctrlOn) { ctrlOn = false; changed = true }
         if (changed) {
-            updateShiftUI()     // NOTE: Changing of keyboard may not nessary in this case.
+            updateShiftUIALLMode()
+            updateShiftUI()
             updateCtrlUI()
         }
     }
@@ -714,7 +739,7 @@ class JapaneseKeyboardService : InputMethodService() {
             }
         }
 
-        updateShitfHiraganaKeyboard()
+        updateShiftHiraganaKeyboard()
 
         rootViewRef?.findViewById<Button>(R.id.key_space)?.text = "space(変換)"
 
@@ -723,7 +748,7 @@ class JapaneseKeyboardService : InputMethodService() {
         rootViewRef?.findViewById<Button>(R.id.key_backslash)?.rotationY = 0.0f
     }
 
-    private fun updateShitfHiraganaKeyboard() {
+    private fun updateShiftHiraganaKeyboard() {
         val keyMap : Array<keyCodeToMoji>
 
         if ( shiftOn == true ) {
@@ -802,6 +827,8 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     private fun toggleKanaMode() {
+        //  Input modes will change cyclic as blow.
+        //  ASCII -> ROMA -> HIRAGANA -> KATAKANA -> ASCII
         inputMode ++
         if (inputMode >= MODE_MAXNUM) {
             inputMode = MODE_ASCII
