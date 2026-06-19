@@ -195,6 +195,83 @@ class JapaneseKeyboardService : InputMethodService() {
         keyCodeToMoji( R.id.key_slash,  "・" ),
     )
 
+    private val engToKatakanaMap = arrayOf(
+        // NOTE: Use only UTF-8 of Japanease language.
+        // 0 to 9
+        keyCodeToMoji( R.id.key_1, "ヌ" ),
+        keyCodeToMoji( R.id.key_2, "フ" ),
+        // a to z
+        keyCodeToMoji( R.id.key_a, "チ" ),
+        keyCodeToMoji( R.id.key_b, "コ" ),
+        keyCodeToMoji( R.id.key_c, "ソ" ),
+        keyCodeToMoji( R.id.key_d, "シ" ),
+        keyCodeToMoji( R.id.key_f, "ハ" ),
+        keyCodeToMoji( R.id.key_g, "キ" ),
+        keyCodeToMoji( R.id.key_h, "ク" ),
+        keyCodeToMoji( R.id.key_i, "ニ" ),
+        keyCodeToMoji( R.id.key_j, "マ" ),
+        keyCodeToMoji( R.id.key_k, "ノ" ),
+        keyCodeToMoji( R.id.key_l, "リ" ),
+        keyCodeToMoji( R.id.key_m, "モ" ),
+        keyCodeToMoji( R.id.key_n, "ミ" ),
+        keyCodeToMoji( R.id.key_o, "ラ" ),
+        keyCodeToMoji( R.id.key_p, "セ" ),
+        keyCodeToMoji( R.id.key_q, "タ" ),
+        keyCodeToMoji( R.id.key_r, "ス" ),
+        keyCodeToMoji( R.id.key_s, "ト" ),
+        keyCodeToMoji( R.id.key_t, "カ" ),
+        keyCodeToMoji( R.id.key_u, "ナ" ),
+        keyCodeToMoji( R.id.key_v, "ヒ" ),
+        keyCodeToMoji( R.id.key_w, "テ" ),
+        keyCodeToMoji( R.id.key_x, "サ" ),
+        keyCodeToMoji( R.id.key_y, "ン" ),
+        // other
+        keyCodeToMoji( R.id.key_hyphen     , "ホ" ),
+        keyCodeToMoji( R.id.key_ensign     , "ー" ),
+        keyCodeToMoji( R.id.key_yama       , "へ" ),
+        keyCodeToMoji( R.id.key_semicolon  , "レ" ),
+        keyCodeToMoji( R.id.key_colon      , "ケ" ),
+        keyCodeToMoji( R.id.key_r_kakukakko, "ム" ),
+        keyCodeToMoji( R.id.key_atmark     , "゛" ),
+        keyCodeToMoji( R.id.key_l_kakukakko, "゜" ),
+        keyCodeToMoji( R.id.key_backslash  , "ロ" ),
+    )
+
+    private val engToKatakanaShiftOffMap = arrayOf(
+        // NOTE: Use only UTF-8 of Japanease language.
+        // 0 to 9
+        keyCodeToMoji( R.id.key_3, "ア" ),
+        keyCodeToMoji( R.id.key_4, "ウ" ),
+        keyCodeToMoji( R.id.key_5, "エ" ),
+        keyCodeToMoji( R.id.key_6, "オ" ),
+        keyCodeToMoji( R.id.key_7, "ヤ" ),
+        keyCodeToMoji( R.id.key_8, "ユ" ),
+        keyCodeToMoji( R.id.key_9, "ヨ" ),
+        keyCodeToMoji( R.id.key_0, "ワ" ),
+        keyCodeToMoji( R.id.key_e, "イ" ),
+        keyCodeToMoji( R.id.key_z, "ツ" ),
+        keyCodeToMoji( R.id.key_comma      , "ネ" ),
+        keyCodeToMoji( R.id.key_pochi      , "ル" ),
+        keyCodeToMoji( R.id.key_slash      , "メ" ),
+    )
+
+    private val engToKatakanaShiftOnMap = arrayOf(
+        // NOTE: Use only UTF-8 of Japanease language.
+        keyCodeToMoji( R.id.key_3,      "ァ" ),
+        keyCodeToMoji( R.id.key_4,      "ゥ" ),
+        keyCodeToMoji( R.id.key_5,      "ェ" ),
+        keyCodeToMoji( R.id.key_6,      "ォ" ),
+        keyCodeToMoji( R.id.key_7,      "ャ" ),
+        keyCodeToMoji( R.id.key_8,      "ュ" ),
+        keyCodeToMoji( R.id.key_9,      "ョ" ),
+        keyCodeToMoji( R.id.key_0,      "ヲ" ),
+        keyCodeToMoji( R.id.key_e,      "ィ" ),
+        keyCodeToMoji( R.id.key_z,      "ッ" ),
+        keyCodeToMoji( R.id.key_comma,  "、" ),
+        keyCodeToMoji( R.id.key_pochi,  "。" ),
+        keyCodeToMoji( R.id.key_slash,  "・" ),
+    )
+
     override fun onCreate() {
         super.onCreate()
 
@@ -466,8 +543,12 @@ class JapaneseKeyboardService : InputMethodService() {
     private fun updateShiftUIALLMode() {
         if (inputMode == MODE_ASCII) {
             updateShiftEnglishKeyboard()
-        } else if (inputMode == MODE_HIRAGANA) {
+        }
+        else if (inputMode == MODE_HIRAGANA) {
             updateShiftHiraganaKeyboard()
+        }
+        else if (inputMode == MODE_KATAKANA) {
+            updateShiftKatakanaKeyboard()
         }
     }
 
@@ -475,6 +556,7 @@ class JapaneseKeyboardService : InputMethodService() {
     private fun isNeedConvertKanji() : Boolean  {
         if ( inputMode == MODE_ROMA     ) return true
         if ( inputMode == MODE_HIRAGANA ) return true
+        if ( inputMode == MODE_KATAKANA ) return true
         return false
     }
 
@@ -482,6 +564,7 @@ class JapaneseKeyboardService : InputMethodService() {
         if ( inputMode == MODE_ASCII    ) return true
         if ( inputMode == MODE_ROMA     ) return true
         if ( inputMode == MODE_HIRAGANA ) return true
+        if ( inputMode == MODE_KATAKANA ) return true
         return false
     }
 
@@ -508,7 +591,11 @@ class JapaneseKeyboardService : InputMethodService() {
                         }
                         else if (inputMode == MODE_HIRAGANA) {
                             handleHiraganaLetter(view)
-                        } else {
+                        }
+                        else if (inputMode == MODE_KATAKANA) {
+                            handleKatakanaLetter(view)
+                        }
+                        else {
                             val text = if (shiftOn) base.uppercase() else base.lowercase()
                             if (ctrlOn) {
                                 val code = letterToKeyCode(base)
@@ -531,6 +618,9 @@ class JapaneseKeyboardService : InputMethodService() {
                     setRepeatableKey(view) {
                         if (inputMode == MODE_HIRAGANA) {
                             handleHiraganaLetter(view)
+                        }
+                        else if (inputMode == MODE_KATAKANA) {
+                            handleKatakanaLetter(view)
                         }
                         else {
                             var out = if (shiftOn) shiftSymbolMap[base] ?: base else base
@@ -864,6 +954,38 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     private fun changeToKatakanaKeyboard() {
+        for ( rec in engToKatakanaMap) {
+            val btn = rootViewRef?.findViewById<Button>(rec.keyCode)
+            if ( btn != null ) {
+                btn.text = rec.moji
+            }
+        }
+
+        updateShiftKatakanaKeyboard()
+
+        rootViewRef?.findViewById<Button>(R.id.key_space)?.text = "space(変換)"
+
+        // Reset rotationY to 0.
+        // RotationY has set to 180 because display backslash in japanease mode.
+        rootViewRef?.findViewById<Button>(R.id.key_backslash)?.rotationY = 0.0f
+    }
+
+    private fun updateShiftKatakanaKeyboard() {
+        val keyMap : Array<keyCodeToMoji>
+
+        if ( shiftOn == true ) {
+            keyMap = engToKatakanaShiftOnMap.copyOf()
+        }
+        else {
+            keyMap = engToKatakanaShiftOffMap.copyOf()
+        }
+
+        for ( rec in keyMap ) {
+            val btn = rootViewRef?.findViewById<Button>(rec.keyCode)
+            if ( btn != null ) {
+                btn.text = rec.moji
+            }
+        }
     }
 
     private fun changeToEngilshKeyboard() {
@@ -966,7 +1088,17 @@ class JapaneseKeyboardService : InputMethodService() {
             cancelConversionRestore()
         }
         val text = base?.text.toString()
-        romaji.pushKanaChar(text)
+        romaji.pushHiraganaChar(text)
+        updateComposingText()
+    }
+
+    private fun handleKatakanaLetter(base: Button) {
+        if (isInConversion()) {
+            // typing while selecting: cancel conversion and restore reading to composing
+            cancelConversionRestore()
+        }
+        val text = base?.text.toString()
+        romaji.pushKatakanaChar(text)
         updateComposingText()
     }
 

@@ -8,6 +8,8 @@
 
 package dev.mikoto2000.oasizjapanesekeyboard.ime
 
+import kotlin.arrayOf
+
 /**
  * Simple streaming Romaji -> Kana converter for IME composing.
  * - Greedy consume with longest-match mapping (3, 2, 1 chars)
@@ -92,7 +94,8 @@ class RomajiConverter {
         var  dakuon : String    // ex) だ
     )
 
-    private val dakutenToMojiMap = arrayOf(
+    private val HiraganaDakutenToMojiMap = arrayOf(
+        // NOTE: Not assgin "う" + "゛"  in UTF-8.
         dakutenToMoji( "か", "が" ),
         dakutenToMoji( "き", "ぎ" ),
         dakutenToMoji( "く", "ぐ" ),
@@ -115,12 +118,44 @@ class RomajiConverter {
         dakutenToMoji( "ほ", "ぼ" ),
     )
 
-    private val handakutenToMojiMap = arrayOf(
+    private val HiraganaHandakutenToMojiMap = arrayOf(
         dakutenToMoji( "は", "ぱ" ),
         dakutenToMoji( "ひ", "ぴ" ),
         dakutenToMoji( "ふ", "ぷ" ),
         dakutenToMoji( "へ", "ぺ" ),
         dakutenToMoji( "ほ", "ぽ" ),
+    )
+
+    private val KatakanaDakutenToMojiMap = arrayOf(
+        dakutenToMoji( "ウ", "ヴ" ),
+        dakutenToMoji( "カ", "ガ" ),
+        dakutenToMoji( "キ", "ギ" ),
+        dakutenToMoji( "ク", "グ" ),
+        dakutenToMoji( "ケ", "ゲ" ),
+        dakutenToMoji( "コ", "ゴ" ),
+        dakutenToMoji( "サ", "ザ" ),
+        dakutenToMoji( "シ", "ジ" ),
+        dakutenToMoji( "ス", "ズ" ),
+        dakutenToMoji( "セ", "ゼ" ),
+        dakutenToMoji( "ソ", "ゾ" ),
+        dakutenToMoji( "タ", "ダ" ),
+        dakutenToMoji( "チ", "ヂ" ),
+        dakutenToMoji( "ツ", "ヅ" ),
+        dakutenToMoji( "テ", "デ" ),
+        dakutenToMoji( "ト", "ド" ),
+        dakutenToMoji( "ハ", "バ" ),
+        dakutenToMoji( "ヒ", "ビ" ),
+        dakutenToMoji( "フ", "ブ" ),
+        dakutenToMoji( "ヘ", "ベ" ),
+        dakutenToMoji( "ホ", "ボ" ),
+    )
+
+    private val KatakanaHandakutenToMojiMap = arrayOf(
+        dakutenToMoji( "ハ", "パ" ),
+        dakutenToMoji( "ヒ", "ピ" ),
+        dakutenToMoji( "フ", "プ" ),
+        dakutenToMoji( "ヘ", "ペ" ),
+        dakutenToMoji( "ホ", "ポ" ),
     )
 
     fun clear() {
@@ -137,15 +172,27 @@ class RomajiConverter {
         consume()   // Alphabets convert to kana.
     }
 
-    fun pushKanaChar(str: String) {
+    fun pushHiraganaChar(str: String) {
+        pushKanaCharCore( str, HiraganaDakutenToMojiMap, HiraganaHandakutenToMojiMap )
+    }
+
+    fun pushKatakanaChar(str: String) {
+        pushKanaCharCore( str, KatakanaDakutenToMojiMap, KatakanaHandakutenToMojiMap )
+    }
+
+    fun pushKanaCharCore(
+        str: String,
+        dakuonMap    :Array<dakutenToMoji>,
+        handakuonMap :Array<dakutenToMoji>
+    ) {
         if ( buffer.isNotEmpty() ) {
             val keyMap : Array<dakutenToMoji>
 
             if ( str == "゛" ) {
-                keyMap = dakutenToMojiMap.copyOf()
+                keyMap = dakuonMap.copyOf()
             }
             else if ( str == "゜" ) {
-                keyMap = handakutenToMojiMap.copyOf()
+                keyMap = handakuonMap.copyOf()
             }
             else {  // No replace
                 buffer.append(str)  // case: no dakuon at second KANA onword
