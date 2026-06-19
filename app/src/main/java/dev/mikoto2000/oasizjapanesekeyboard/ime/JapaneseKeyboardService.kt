@@ -17,6 +17,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowCompat
 import kotlin.arrayOf
+import android.graphics.Typeface
+import android.graphics.Color
+import android.content.res.ColorStateList
 
 class JapaneseKeyboardService : InputMethodService() {
     private var shiftOn = false
@@ -93,7 +96,7 @@ class JapaneseKeyboardService : InputMethodService() {
         "," to "<",
         "." to ">",
         "/" to "?",
-        "\\" to "_"
+        "\\" to "|"     // This setting is for en-sign. Implemant replacing of backslash in side of logic.
     )
 
     data class keyCodeToMoji (
@@ -259,23 +262,13 @@ class JapaneseKeyboardService : InputMethodService() {
 
         shiftBtn = root.findViewById<Button>(R.id.key_shift)
         shiftBtn?.setOnClickListener {
-            if (inputMode == MODE_ASCII) {
-                shiftOn = !shiftOn
-                updateShiftUI()
-            }
-            else if (inputMode == MODE_HIRAGANA) {
-                shiftOn = !shiftOn
-                updateShitfHiraganaKeyboard()
-            }
+            updateShitfUIALLMode()
         }
-        updateShiftUI()
+        updateShiftUI()     // NOTE: Changing of keyboard may not nessary in this case.
 
         shiftBtnRight = root.findViewById<Button>(R.id.key_shift_right)
         shiftBtnRight?.setOnClickListener {
-            if (inputMode == MODE_ASCII) {
-                shiftOn = !shiftOn
-                updateShiftUI()
-            }
+            updateShitfUIALLMode()
         }
 
         ctrlBtn = root.findViewById<Button>(R.id.key_ctrl)
@@ -399,6 +392,17 @@ class JapaneseKeyboardService : InputMethodService() {
         return root
     }
 
+    private fun updateShitfUIALLMode() {
+        if (inputMode == MODE_ASCII) {
+            shiftOn = !shiftOn
+            updateShiftEnglishKeyboard()
+        } else if (inputMode == MODE_HIRAGANA) {
+            shiftOn = !shiftOn
+            updateShitfHiraganaKeyboard()
+        }
+        updateShiftUI()
+    }
+
     // Is it mode need to convert to KANJI.
     private fun isNeedConvertKanji() : Boolean  {
         if ( inputMode == MODE_ROMA ) return true
@@ -454,7 +458,11 @@ class JapaneseKeyboardService : InputMethodService() {
                             handleHiraganaLetter(view)
                         }
                         else {
-                            val out = if (shiftOn) shiftSymbolMap[base] ?: base else base
+                            var out = if (shiftOn) shiftSymbolMap[base] ?: base else base
+                            if (view.id == R.id.key_backslash ) {
+                                out = if (shiftOn) "_" else "\\"
+                            }
+
                             if (inputMode == MODE_ROMA) {
                                 flushComposingOrConversionIfNeeded()
                             }
@@ -468,7 +476,7 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
-    private fun updateShiftUI() {
+    private fun updateShiftEnglishKeyboard() {
         // Update labels for letter buttons
         for (btn in letterButtons) {
             val tag = btn.tag as? String ?: continue
@@ -479,13 +487,43 @@ class JapaneseKeyboardService : InputMethodService() {
         for ((btn, base) in symbolButtons) {
             btn.text = if (shiftOn) shiftSymbolMap[base] ?: base else base
         }
+
+        // Reset rotationY to 0.
+        // RotationY has set to 180 because display backslash in japanease mode.
+        if (shiftOn) {
+            rootViewRef?.findViewById<Button>(R.id.key_backslash)?.text = "_"
+            rootViewRef?.findViewById<Button>(R.id.key_backslash)?.rotationY = 0.0f
+        }
+        else {
+            rootViewRef?.findViewById<Button>(R.id.key_backslash)?.text = "/"
+            rootViewRef?.findViewById<Button>(R.id.key_backslash)?.rotationY = 180.0f
+        }
+    }
+
+    private fun changeOnColorButton(btn : Button, state :Boolean) {
+        var textColor1 = Color.rgb(255,255,255)  // Withe
+        var textColor2 = Color.rgb(0,0,0)  // black
+        var backColor = Color.rgb(0,0,255)  // Blue
+
+        if (state) {
+            // btn.setTypeface(null, 1 /*Bold*/);
+            btn.setTextColor( textColor1 )
+            btn.setBackgroundTintList( ColorStateList.valueOf( backColor ) );
+        }
+        else {
+            // btn.setTypeface(null, 0 /*Bold*/);
+            btn.setTextColor( textColor2 )
+            btn.setBackgroundTintList( ColorStateList.valueOf( textColor1 ) );
+        }
+    }
+    private fun updateShiftUI() {
         val active = shiftOn
         shiftBtn?.let { btn ->
-            btn.text = if (active) "Shift ON" else "Shift"
+            changeOnColorButton(btn, active)
             btn.isSelected = active
         }
         shiftBtnRight?.let { btn ->
-            btn.text = if (active) "Shift ON" else "Shift"
+            changeOnColorButton(btn, active)
             btn.isSelected = active
         }
     }
@@ -559,7 +597,7 @@ class JapaneseKeyboardService : InputMethodService() {
         if (shiftOn) { shiftOn = false; changed = true }
         if (ctrlOn) { ctrlOn = false; changed = true }
         if (changed) {
-            updateShiftUI()
+            updateShiftUI()     // NOTE: Changing of keyboard may not nessary in this case.
             updateCtrlUI()
         }
     }
@@ -709,9 +747,9 @@ class JapaneseKeyboardService : InputMethodService() {
     private fun changeToEngilshKeyboard() {
         rootViewRef?.findViewById<Button>(R.id.key_space)?.text = "space"
 
-        // Set rotationY to 180 degree because display backslash in japanease mode.
-        rootViewRef?.findViewById<Button>(R.id.key_backslash)?.rotationY = 180.0f
+        updateShiftEnglishKeyboard()
     }
+
     private fun updateLangToggleUI() {
         langBtn?.let { btn ->
             btn.text = MODE_DSPTXT[inputMode]
@@ -729,7 +767,7 @@ class JapaneseKeyboardService : InputMethodService() {
             shiftBtnRight?.isEnabled = mode
             shiftBtn?.alpha = alpha
             shiftBtnRight?.alpha = alpha
-            updateShiftUI()
+            updateShiftUI()     // NOTE: Changing of keyboard may not nessary in this case.
             updateCtrlUI()
 
             if (inputMode == MODE_HIRAGANA) {
