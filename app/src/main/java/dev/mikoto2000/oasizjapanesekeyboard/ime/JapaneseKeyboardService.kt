@@ -19,7 +19,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
-import android.text.format.Time;    // NOTE: Warining <<-- 'class Time : Any' is deprecated. Deprecated in Java.
 import java.util.concurrent.Executors
 import dev.mikoto2000.oasizjapanesekeyboard.R
 import dev.mikoto2000.oasizjapanesekeyboard.MainActivity
@@ -43,7 +42,9 @@ class JapaneseKeyboardService : InputMethodService() {
     private var rootViewRef: View? = null
     private var feedbackEnabled = true
     private val repeatHandler = Handler(Looper.getMainLooper())
+    private val longPressHandler = Handler(Looper.getMainLooper())
     private val repeatTasks = mutableMapOf<View, Runnable>()
+    private val longPressTasks = mutableMapOf<View, Runnable>()
     private val letterButtons = mutableListOf<Button>()
     private val symbolButtons = mutableListOf<Pair<Button, String>>()
     private var fnVisible = true
@@ -584,16 +585,21 @@ class JapaneseKeyboardService : InputMethodService() {
             btn.setTypeface(null, 1 /*Bold*/);
             btn.setTextColor( textColor1 )
             btn.setBackgroundTintList( ColorStateList.valueOf( lockColor ) );
-        }
-        else if ( onState ) {
-            btn.setTypeface(null, 0 /*Bold*/);
-            btn.setTextColor( textColor1 )
-            btn.setBackgroundTintList( ColorStateList.valueOf( onColor ) );
+            btn.text = "・" + btn.text
         }
         else {
-            btn.setTypeface(null, 0 /*Bold*/);
-            btn.setTextColor( textColor2 )
-            btn.setBackgroundTintList( ColorStateList.valueOf( textColor1 ) );
+            var find : String = "・"
+            btn.text = btn.text.replace(find.toRegex(),"")
+            if ( onState ) {
+                btn.setTypeface(null, 0 /*Bold*/);
+                btn.setTextColor( textColor1 )
+                btn.setBackgroundTintList( ColorStateList.valueOf( onColor ) );
+            }
+            else {
+                btn.setTypeface(null, 0 /*Bold*/);
+                btn.setTextColor( textColor2 )
+                btn.setBackgroundTintList( ColorStateList.valueOf( textColor1 ) );
+            }
         }
     }
 
@@ -732,18 +738,18 @@ class JapaneseKeyboardService : InputMethodService() {
             /* NOTE: There are 6 warning error in this function. */
                 when (ev.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
-                        var nowTime = android.text.format.Time("Asia/Tokyo") // <<--  'constructor(p0: String!): Time' is deprecated. Deprecated in Java.
-                        nowTime?.setToNow()                 // <<-- 'fun setToNow(): Unit' is deprecated. Deprecated in Java.
-                        longPressStarTime = nowTime.toMillis(false)     // <<-- 'fun toMillis(p0: Boolean): Long' is deprecated. Deprecated in Java.
+                        // Handler at passed waittime
+                        val task = object : Runnable {
+                            override fun run() {
+                                action()
+                            }
+                        }
+                        longPressTasks[v] = task    // keep instance for stop task
+                        longPressHandler.postDelayed(task, waittime)    // Start waiting
                         false // if set to true, do not occure click enent.
                     }
                     MotionEvent.ACTION_UP -> {
-                        var nowTime = android.text.format.Time("Asia/Tokyo") // <<--  'constructor(p0: String!): Time' is deprecated. Deprecated in Java.
-                        nowTime?.setToNow()                 // <<-- 'fun setToNow(): Unit' is deprecated. Deprecated in Java.
-                        val diff = nowTime.toMillis(false) - longPressStarTime   // <<-- 'fun toMillis(p0: Boolean): Long' is deprecated. Deprecated in Java.
-                        if ( diff > waittime )  {
-                            action()
-                        }
+                        longPressTasks.remove(v)?.let { longPressHandler.removeCallbacks(it) }
                         false // if set to true, do not occure click enent.
                     }
                     else -> false
