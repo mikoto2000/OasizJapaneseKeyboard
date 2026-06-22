@@ -11,19 +11,20 @@ Buildは、Android Studio 2026.1月版を使用しています。2024版では�
 4. シフトロックモードを追加
 
 以下スクリーンショットです。<br>
-<img height="200" alt="かな入力" src="https://github.com/user-attachments/assets/3c707d41-7403-4cff-a252-1d66565d08fb" /><br>
-<img height="200" alt="カタカナ入力" src="https://github.com/user-attachments/assets/262f1e98-963e-4a6e-b872-a8f3bfd380f7" /><br>
-<img height="230" alt="シフトロック" src="https://github.com/user-attachments/assets/a31639f0-cac9-4728-a745-123ad0b2f89b" /><br>
-<img height="200" alt="バックスラッシュ" src="https://github.com/user-attachments/assets/6e7f18a9-21bc-4f8b-a556-2c8f6dc04ae5" /><br>
+<img width="500" alt="かな入力" src="https://github.com/user-attachments/assets/3c707d41-7403-4cff-a252-1d66565d08fb" /><br>
+<img width="500" alt="カタカナ入力" src="https://github.com/user-attachments/assets/262f1e98-963e-4a6e-b872-a8f3bfd380f7" /><br>
+<img width="500" alt="シフトロック" src="https://github.com/user-attachments/assets/a31639f0-cac9-4728-a745-123ad0b2f89b" /><br>
+<img width="500" alt="バックスラッシュ" src="https://github.com/user-attachments/assets/6e7f18a9-21bc-4f8b-a556-2c8f6dc04ae5" /><br>
 <br>
 
 気になるところ、直したいとおもっていることろ
 1. 横向きにしたとき、ボタン高が高くなる。横向き検出時に高さ変更が必要。
 2. DELキー(後方削除)の追加。
-3. Enterキーは高さ2行使いたい。shiftは一つでよいかと。
+3. Enterキーは高さ2行使いたい。(androidでは無理かも) shiftは一つでよいかと。
 4. ESCキーは入力内容のキャンセルとしたい。今はキーボードがキャンセルになっている。
 5. 文字をもう少し大きく。
-6. 選択中文字のホバー表示
+6. 無変換キー
+7. 選択中文字のホバー表示
 
 OasizJapaneseKeyboard
 =====================
