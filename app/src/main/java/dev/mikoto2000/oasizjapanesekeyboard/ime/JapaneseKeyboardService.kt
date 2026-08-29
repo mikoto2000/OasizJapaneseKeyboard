@@ -620,11 +620,24 @@ class JapaneseKeyboardService : InputMethodService() {
         conversionReading = reading
         // start new conversion session (invalidate in-flight queries)
         convQuerySeq++
-        segments = buildSegments(reading)
+        // Segment discovery touches the dictionary repeatedly, so keep it off the IME/UI thread.
+        segments = mutableListOf(Segment(reading, loading = true))
         segmentFocus = 0
-        ic.setComposingText(joinedOutputFromSegments(), 1)
+        ic.setComposingText(reading, 1)
         showCandidatesUI()
-        loadSegmentCandidates(segmentFocus)
+        val token = convQuerySeq
+        convExecutor.execute {
+            val built = buildSegments(reading)
+            repeatHandler.post {
+                if (isInConversion() && convQuerySeq == token && conversionReading == reading) {
+                    segments = built
+                    segmentFocus = 0
+                    updateSegmentsUI()
+                    updateComposingFromSegments()
+                    loadSegmentCandidates(0)
+                }
+            }
+        }
     }
 
     private fun buildSegments(reading: String): MutableList<Segment> {
@@ -638,9 +651,8 @@ class JapaneseKeyboardService : InputMethodService() {
             val maxTry = kotlin.math.min(maxLen, reading.length - i)
             for (l in maxTry downTo 1) {
                 val sub = reading.substring(i, i + l)
-                val qs = try { converter.query(sub) } catch (_: Throwable) { emptyList() }
-                // score by number of candidates beyond baseline (reading + katakana)
-                val score = (qs.size - 2).coerceAtLeast(0)
+                val hasCandidates = try { converter.hasExactCandidates(sub) } catch (_: Throwable) { false }
+                val score = if (hasCandidates) 1 else 0
                 if (l == 1 || score > 0) {
                     if (score > bestScore || (score == bestScore && l > bestLen)) {
                         bestScore = score
@@ -690,12 +702,24 @@ class JapaneseKeyboardService : InputMethodService() {
         updateCandidatesUI()
         val token = convQuerySeq
         convExecutor.execute {
-            val res = try { converter.query(reading) } catch (_: Throwable) { emptyList() }
+            // Exact TOP 5 is normally index-only and can be displayed without waiting for
+            // the substantially more expensive prefix/prediction aggregation.
+            val initial = try { converter.query(reading, 5, false) } catch (_: Throwable) { emptyList() }
             repeatHandler.post {
                 if (isInConversion() && convQuerySeq == token && segments === segs && segs.getOrNull(index)?.reading == reading) {
-                    seg.candidates = res.toMutableList()
-                    seg.loading = false
+                    seg.candidates = initial.toMutableList()
                     // Initialize selection to first candidate if available
+                    if (seg.selectedIndex !in seg.candidates.indices) seg.selectedIndex = 0
+                    updateSegmentsUI()
+                    updateCandidatesUI()
+                    updateComposingFromSegments()
+                }
+            }
+            val full = try { converter.query(reading, 50, true) } catch (_: Throwable) { initial }
+            repeatHandler.post {
+                if (isInConversion() && convQuerySeq == token && segments === segs && segs.getOrNull(index)?.reading == reading) {
+                    seg.candidates = full.toMutableList()
+                    seg.loading = false
                     if (seg.selectedIndex !in seg.candidates.indices) seg.selectedIndex = 0
                     updateSegmentsUI()
                     updateCandidatesUI()

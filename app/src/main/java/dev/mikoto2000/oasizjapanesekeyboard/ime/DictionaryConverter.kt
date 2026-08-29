@@ -19,20 +19,25 @@ class DictionaryConverter(
     private val entries: MutableMap<String, MutableList<Pair<String, Int>>> = HashMap()
 
     override fun query(readingHiragana: String): List<String> {
+        return query(readingHiragana, 50, true)
+    }
+
+    override fun query(readingHiragana: String, limit: Int, includePredictions: Boolean): List<String> {
         if (readingHiragana.isEmpty()) return emptyList()
+        if (limit <= 0) return emptyList()
         ensureLoaded()
-        val limit = 50
         val out = LinkedHashSet<String>()
         // Baseline: echo reading and katakana
         out += readingHiragana
-        out += hiraganaToKatakana(readingHiragana)
+        if (out.size < limit) out += hiraganaToKatakana(readingHiragana)
         // Exact matches first
         entries[readingHiragana]?.let { list ->
-            list.sortedBy { it.second }.forEach { (w, _) ->
+            for ((w, _) in list.sortedBy { it.second }) {
                 out += w
+                if (out.size >= limit) break
             }
         }
-        if (out.size < limit) {
+        if (includePredictions && out.size < limit) {
             val prefix = readingHiragana
             val grouped = mutableMapOf<String, Int>()
             // Aggregate min cost per word over all keys starting with prefix (excluding exact key)
@@ -49,7 +54,12 @@ class DictionaryConverter(
             }
         }
         if (out.size < 2) out.addAll(SimpleConverter().query(readingHiragana))
-        return out.toList()
+        return out.take(limit)
+    }
+
+    override fun hasExactCandidates(readingHiragana: String): Boolean {
+        ensureLoaded()
+        return entries[readingHiragana].isNullOrEmpty().not()
     }
 
     private fun ensureLoaded() {

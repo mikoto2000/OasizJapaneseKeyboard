@@ -2,6 +2,13 @@ package dev.mikoto2000.oasizjapanesekeyboard.ime
 
 interface JapaneseConverter {
     fun query(readingHiragana: String): List<String>
+    /** A bounded query used for the first, latency-sensitive candidate batch. */
+    fun query(readingHiragana: String, limit: Int, includePredictions: Boolean): List<String> =
+        query(readingHiragana).take(limit)
+
+    /** Lightweight check used while finding segment boundaries. */
+    fun hasExactCandidates(readingHiragana: String): Boolean =
+        query(readingHiragana, 3, false).size > 2
     // Optional: record selection for learning. Default no-op.
     fun recordSelection(readingHiragana: String, word: String) {}
 }
@@ -29,6 +36,12 @@ class SimpleConverter : JapaneseConverter {
         dict[readingHiragana]?.let { base.addAll(it) }
         return base.distinct()
     }
+
+    override fun query(readingHiragana: String, limit: Int, includePredictions: Boolean): List<String> =
+        query(readingHiragana).take(limit)
+
+    override fun hasExactCandidates(readingHiragana: String): Boolean =
+        dict[readingHiragana].isNullOrEmpty().not()
 
     private fun hiraganaToKatakana(hira: String): String {
         val sb = StringBuilder()

@@ -52,27 +52,31 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
 
 
     override fun query(readingHiragana: String): List<String> {
+        return query(readingHiragana, 50, true)
+    }
+
+    override fun query(readingHiragana: String, limit: Int, includePredictions: Boolean): List<String> {
         if (readingHiragana.isEmpty()) return emptyList()
+        if (limit <= 0) return emptyList()
         ensureDb()
 
-        val limit = 50
         val out = LinkedHashSet<String>()
         out += readingHiragana
-        out += hiraganaToKatakana(readingHiragana)
+        if (out.size < limit) out += hiraganaToKatakana(readingHiragana)
 
         val db = openReadDb()
         try {
             // Exact with learning priority
             db.rawQuery(
                 "SELECT e.word, IFNULL(l.freq,0) AS f, e.cost FROM entries e LEFT JOIN learn l ON l.reading = ? AND l.word = e.word WHERE e.reading = ? ORDER BY f DESC, e.cost ASC LIMIT ?",
-                arrayOf(readingHiragana, readingHiragana, limit.toString())
+                arrayOf(readingHiragana, readingHiragana, (limit - out.size).coerceAtLeast(0).toString())
             ).use { c ->
-                while (c.moveToNext()) {
+                while (c.moveToNext() && out.size < limit) {
                     out += c.getString(0)
                 }
             }
             // Prefix (exclude exact reading). Aggregate by word with min cost and learning freq.
-            if (out.size < limit) {
+            if (includePredictions && out.size < limit) {
                 val remain = limit - out.size
                 db.rawQuery(
                     "SELECT e.word, MIN(e.cost) as c, MAX(IFNULL(l.freq,0)) as f FROM entries e LEFT JOIN learn l ON l.reading = ? AND l.word = e.word WHERE e.reading LIKE ? || '%' AND e.reading <> ? GROUP BY e.word ORDER BY f DESC, c ASC LIMIT ?",
@@ -89,6 +93,15 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
         }
         if (out.size <= 2) out.addAll(SimpleConverter().query(readingHiragana))
         return out.toList()
+    }
+
+    override fun hasExactCandidates(readingHiragana: String): Boolean {
+        if (readingHiragana.isEmpty()) return false
+        ensureDb()
+        openReadDb().rawQuery(
+            "SELECT 1 FROM entries WHERE reading = ? LIMIT 1",
+            arrayOf(readingHiragana)
+        ).use { cursor -> return cursor.moveToFirst() }
     }
 
     private fun assetExists(path: String): Boolean {
