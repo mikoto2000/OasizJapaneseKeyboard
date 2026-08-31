@@ -14,6 +14,10 @@ import java.util.concurrent.Executors
 import dev.mikoto2000.oasizjapanesekeyboard.R
 
 class JapaneseKeyboardService : InputMethodService() {
+    private companion object {
+        const val REMAINING_CANDIDATES_DELAY_MS = 120L
+    }
+
     private var shiftOn = false
     private var ctrlOn = false
     private var shiftBtn: Button? = null
@@ -42,6 +46,8 @@ class JapaneseKeyboardService : InputMethodService() {
     private var candidateList: ViewGroup? = null
     private var converter: JapaneseConverter = SimpleConverter()
     private val convExecutor = Executors.newSingleThreadExecutor()
+    // Slow prefix prediction must never queue in front of the next exact TOP 5 lookup.
+    private val predictionExecutor = Executors.newSingleThreadExecutor()
     private var convQuerySeq: Long = 0L
     private var sqliteConverter: SqliteDictionaryConverter? = null
 
@@ -624,7 +630,13 @@ class JapaneseKeyboardService : InputMethodService() {
         segments = mutableListOf(Segment(reading, loading = true))
         segmentFocus = 0
         ic.setComposingText(reading, 1)
+        // Always have useful content on the very first frame, even while a large
+        // packaged database is being copied/opened for the first time.
+        segments?.firstOrNull()?.candidates = SimpleConverter().query(reading).take(2).toMutableList()
         showCandidatesUI()
+        // Do not make the first visible candidates wait for segment discovery.
+        // The placeholder segment represents the complete reading and is replaced below.
+        loadSegmentCandidates(0, includeRemaining = false)
         val token = convQuerySeq
         convExecutor.execute {
             val built = buildSegments(reading)
@@ -645,22 +657,13 @@ class JapaneseKeyboardService : InputMethodService() {
         val segs = mutableListOf<Segment>()
         var i = 0
         while (i < reading.length) {
-            var taken = 1
-            var bestLen = 1
-            var bestScore = 0
             val maxTry = kotlin.math.min(maxLen, reading.length - i)
-            for (l in maxTry downTo 1) {
-                val sub = reading.substring(i, i + l)
-                val hasCandidates = try { converter.hasExactCandidates(sub) } catch (_: Throwable) { false }
-                val score = if (hasCandidates) 1 else 0
-                if (l == 1 || score > 0) {
-                    if (score > bestScore || (score == bestScore && l > bestLen)) {
-                        bestScore = score
-                        bestLen = l
-                    }
-                }
+            // One indexed lookup per segment instead of up to maxLen separate queries.
+            val taken = try {
+                converter.longestExactPrefix(reading, i, maxTry)
+            } catch (_: Throwable) {
+                1
             }
-            taken = bestLen
             val segReading = reading.substring(i, i + taken)
             segs.add(Segment(segReading))
             i += taken
@@ -694,7 +697,7 @@ class JapaneseKeyboardService : InputMethodService() {
         loadSegmentCandidates(segmentFocus)
     }
 
-    private fun loadSegmentCandidates(index: Int) {
+    private fun loadSegmentCandidates(index: Int, includeRemaining: Boolean = true) {
         val segs = segments ?: return
         val seg = segs.getOrNull(index) ?: return
         val reading = seg.reading
@@ -715,17 +718,27 @@ class JapaneseKeyboardService : InputMethodService() {
                     updateComposingFromSegments()
                 }
             }
-            val full = try { converter.query(reading, 50, true) } catch (_: Throwable) { initial }
-            repeatHandler.post {
+            if (!includeRemaining) return@execute
+
+            // Give immediate navigation/selection work a chance to enter the executor
+            // before the more expensive prediction query.
+            repeatHandler.postDelayed({
                 if (isInConversion() && convQuerySeq == token && segments === segs && segs.getOrNull(index)?.reading == reading) {
-                    seg.candidates = full.toMutableList()
-                    seg.loading = false
-                    if (seg.selectedIndex !in seg.candidates.indices) seg.selectedIndex = 0
-                    updateSegmentsUI()
-                    updateCandidatesUI()
-                    updateComposingFromSegments()
+                    predictionExecutor.execute {
+                        val full = try { converter.query(reading, 50, true) } catch (_: Throwable) { initial }
+                        repeatHandler.post {
+                            if (isInConversion() && convQuerySeq == token && segments === segs && segs.getOrNull(index)?.reading == reading) {
+                                seg.candidates = full.toMutableList()
+                                seg.loading = false
+                                if (seg.selectedIndex !in seg.candidates.indices) seg.selectedIndex = 0
+                                updateSegmentsUI()
+                                updateCandidatesUI()
+                                updateComposingFromSegments()
+                            }
+                        }
+                    }
                 }
-            }
+            }, REMAINING_CANDIDATES_DELAY_MS)
         }
     }
 
@@ -921,6 +934,7 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     override fun onDestroy() {
+        repeatHandler.removeCallbacksAndMessages(null)
         try {
             sqliteConverter?.close()
         } catch (_: Exception) {
@@ -928,6 +942,7 @@ class JapaneseKeyboardService : InputMethodService() {
             sqliteConverter = null
         }
         convExecutor.shutdownNow()
+        predictionExecutor.shutdownNow()
         super.onDestroy()
     }
 }

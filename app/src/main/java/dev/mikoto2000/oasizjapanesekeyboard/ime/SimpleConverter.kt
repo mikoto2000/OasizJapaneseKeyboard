@@ -9,6 +9,14 @@ interface JapaneseConverter {
     /** Lightweight check used while finding segment boundaries. */
     fun hasExactCandidates(readingHiragana: String): Boolean =
         query(readingHiragana, 3, false).size > 2
+
+    /** Returns the longest exact dictionary key starting at [start], or 1 as fallback. */
+    fun longestExactPrefix(text: String, start: Int, maxLength: Int): Int {
+        for (length in maxLength downTo 1) {
+            if (hasExactCandidates(text.substring(start, start + length))) return length
+        }
+        return 1
+    }
     // Optional: record selection for learning. Default no-op.
     fun recordSelection(readingHiragana: String, word: String) {}
 }
@@ -42,6 +50,13 @@ class SimpleConverter : JapaneseConverter {
 
     override fun hasExactCandidates(readingHiragana: String): Boolean =
         dict[readingHiragana].isNullOrEmpty().not()
+
+    override fun longestExactPrefix(text: String, start: Int, maxLength: Int): Int {
+        for (length in maxLength downTo 1) {
+            if (dict.containsKey(text.substring(start, start + length))) return length
+        }
+        return 1
+    }
 
     private fun hiraganaToKatakana(hira: String): String {
         val sb = StringBuilder()

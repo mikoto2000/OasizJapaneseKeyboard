@@ -6,14 +6,31 @@ import android.database.sqlite.SQLiteStatement
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
+import java.util.concurrent.ConcurrentHashMap
 
 class SqliteDictionaryConverter(private val context: Context) : JapaneseConverter {
+    private companion object {
+        // Prediction quality remains broad enough for a candidate bar while avoiding
+        // unbounded aggregation for one-character readings.
+        const val PREFIX_SCAN_LIMIT = 384
+        const val ASSET_COPY_BUFFER_SIZE = 1024 * 1024
+    }
+
     private val dbFile: File by lazy {
         File(context.filesDir, "dictionary/words.db")
     }
     private val initLock = Any()
+    private data class QueryKey(val reading: String, val limit: Int, val predictions: Boolean)
+    private val candidateCache = object : LinkedHashMap<QueryKey, List<String>>(128, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<QueryKey, List<String>>): Boolean =
+            size > 128
+    }
+    private val segmentCache = object : LinkedHashMap<String, Int>(128, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>): Boolean =
+            size > 128
+    }
     @Volatile private var dbReady = false
-    @Volatile private var readDb: SQLiteDatabase? = null
+    private val readDbs = ConcurrentHashMap<Thread, SQLiteDatabase>()
 
     // Ensure DB exists: copy from assets if available; otherwise build from TSV asset.
     private fun ensureDb() {
@@ -45,8 +62,8 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
 
     fun close() {
         synchronized(initLock) {
-            readDb?.close()
-            readDb = null
+            readDbs.values.forEach { db -> if (db.isOpen) db.close() }
+            readDbs.clear()
         }
     }
 
@@ -58,6 +75,14 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
     override fun query(readingHiragana: String, limit: Int, includePredictions: Boolean): List<String> {
         if (readingHiragana.isEmpty()) return emptyList()
         if (limit <= 0) return emptyList()
+        val key = QueryKey(readingHiragana, limit, includePredictions)
+        synchronized(candidateCache) {
+            candidateCache[key]?.let { return it }
+            // A completed full query contains the same exact candidates at its head.
+            if (!includePredictions) {
+                candidateCache[QueryKey(readingHiragana, 50, true)]?.let { return it.take(limit) }
+            }
+        }
         ensureDb()
 
         val out = LinkedHashSet<String>()
@@ -78,9 +103,23 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
             // Prefix (exclude exact reading). Aggregate by word with min cost and learning freq.
             if (includePredictions && out.size < limit) {
                 val remain = limit - out.size
+                // A parameterized `LIKE ? || '%'` is not reliably converted into an
+                // index range by Android SQLite. Explicit bounds keep this on
+                // idx_entries_reading, especially important for the 1M+ entry dictionary.
+                val prefixEnd = readingHiragana + '\uFFFF'
                 db.rawQuery(
-                    "SELECT e.word, MIN(e.cost) as c, MAX(IFNULL(l.freq,0)) as f FROM entries e LEFT JOIN learn l ON l.reading = ? AND l.word = e.word WHERE e.reading LIKE ? || '%' AND e.reading <> ? GROUP BY e.word ORDER BY f DESC, c ASC LIMIT ?",
-                    arrayOf(readingHiragana, readingHiragana, readingHiragana, remain.toString())
+                    "SELECT p.word, MIN(p.cost) as c, MAX(IFNULL(l.freq,0)) as f " +
+                        "FROM (SELECT word, cost FROM entries INDEXED BY idx_entries_reading " +
+                        "WHERE reading > ? AND reading < ? LIMIT ?) p " +
+                        "LEFT JOIN learn l ON l.reading = ? AND l.word = p.word " +
+                        "GROUP BY p.word ORDER BY f DESC, c ASC LIMIT ?",
+                    arrayOf(
+                        readingHiragana,
+                        prefixEnd,
+                        PREFIX_SCAN_LIMIT.toString(),
+                        readingHiragana,
+                        remain.toString()
+                    )
                 ).use { c ->
                     while (c.moveToNext() && out.size < limit) {
                         val w = c.getString(0)
@@ -92,7 +131,9 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
             // keep db open for reuse
         }
         if (out.size <= 2) out.addAll(SimpleConverter().query(readingHiragana))
-        return out.toList()
+        return out.toList().also { result ->
+            synchronized(candidateCache) { candidateCache[key] = result }
+        }
     }
 
     override fun hasExactCandidates(readingHiragana: String): Boolean {
@@ -102,6 +143,23 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
             "SELECT 1 FROM entries WHERE reading = ? LIMIT 1",
             arrayOf(readingHiragana)
         ).use { cursor -> return cursor.moveToFirst() }
+    }
+
+    override fun longestExactPrefix(text: String, start: Int, maxLength: Int): Int {
+        if (maxLength <= 0) return 1
+        val cacheKey = text.substring(start, start + maxLength)
+        synchronized(segmentCache) { segmentCache[cacheKey]?.let { return it } }
+        ensureDb()
+        val readings = (maxLength downTo 1).map { text.substring(start, start + it) }
+        val placeholders = readings.joinToString(",") { "?" }
+        openReadDb().rawQuery(
+            "SELECT reading FROM entries WHERE reading IN ($placeholders) ORDER BY LENGTH(reading) DESC LIMIT 1",
+            readings.toTypedArray()
+        ).use { cursor ->
+            val result = if (cursor.moveToFirst()) cursor.getString(0).length else 1
+            synchronized(segmentCache) { segmentCache[cacheKey] = result }
+            return result
+        }
     }
 
     private fun assetExists(path: String): Boolean {
@@ -115,7 +173,7 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
     private fun copyAssetToFile(assetPath: String, dest: File) {
         context.assets.open(assetPath).use { input ->
             dest.outputStream().use { output ->
-                input.copyTo(output)
+                input.copyTo(output, ASSET_COPY_BUFFER_SIZE)
             }
         }
     }
@@ -195,6 +253,9 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
     }
 
     override fun recordSelection(readingHiragana: String, word: String) {
+        synchronized(candidateCache) {
+            candidateCache.keys.removeAll { it.reading == readingHiragana }
+        }
         ensureDb()
         val now = System.currentTimeMillis()
         val db = SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE)
@@ -220,17 +281,21 @@ class SqliteDictionaryConverter(private val context: Context) : JapaneseConverte
     }
 
     private fun openReadDb(): SQLiteDatabase {
-        val current = readDb
+        val thread = Thread.currentThread()
+        val current = readDbs[thread]
         if (current != null && current.isOpen) return current
         synchronized(initLock) {
-            val cached = readDb
+            val cached = readDbs[thread]
             if (cached != null && cached.isOpen) return cached
             val db = SQLiteDatabase.openDatabase(
                 dbFile.path,
                 null,
                 SQLiteDatabase.OPEN_READONLY or SQLiteDatabase.NO_LOCALIZED_COLLATORS
             )
-            readDb = db
+            // Keep hot index pages in memory; both pragmas are safe for this read-only handle.
+            db.rawQuery("PRAGMA mmap_size=67108864", null).use { it.moveToFirst() }
+            db.rawQuery("PRAGMA cache_size=-8192", null).use { it.moveToFirst() }
+            readDbs[thread] = db
             return db
         }
     }

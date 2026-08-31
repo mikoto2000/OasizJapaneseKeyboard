@@ -62,6 +62,14 @@ class DictionaryConverter(
         return entries[readingHiragana].isNullOrEmpty().not()
     }
 
+    override fun longestExactPrefix(text: String, start: Int, maxLength: Int): Int {
+        ensureLoaded()
+        for (length in maxLength downTo 1) {
+            if (entries.containsKey(text.substring(start, start + length))) return length
+        }
+        return 1
+    }
+
     private fun ensureLoaded() {
         if (loaded.get()) return
         synchronized(this) {
