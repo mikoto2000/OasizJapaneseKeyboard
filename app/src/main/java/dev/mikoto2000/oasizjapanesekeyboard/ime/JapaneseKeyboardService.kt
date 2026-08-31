@@ -340,6 +340,12 @@ class JapaneseKeyboardService : InputMethodService() {
                     setRepeatableKey(view) {
                         val out = if (shiftOn) shiftSymbolMap[base] ?: base else base
                         if (kanaMode) {
+                            if (out == "-") {
+                                if (isInConversion()) cancelConversionRestore()
+                                romaji.appendKana("ー")
+                                updateComposingText()
+                                return@setRepeatableKey
+                            }
                             flushComposingOrConversionIfNeeded()
                         }
                         commitText(out)
@@ -587,29 +593,22 @@ class JapaneseKeyboardService : InputMethodService() {
             clearComposingSuggestions()
         } else {
             ic.setComposingText(text, 1)
-            scheduleComposingSuggestions(romaji.getSuggestionReadings())
+            scheduleComposingSuggestions(text)
         }
     }
 
-    private fun scheduleComposingSuggestions(readings: List<String>) {
+    private fun scheduleComposingSuggestions(reading: String) {
         suggestionTask?.let { repeatHandler.removeCallbacks(it) }
         suggestionQuerySeq++
         val token = suggestionQuerySeq
 
-        val validReadings = readings
-            .filter { reading -> reading.isNotEmpty() && reading.all { it in '\u3041'..'\u3096' || it == 'ー' } }
-            .distinct()
-            .take(6)
-        if (validReadings.isEmpty()) {
+        if (!reading.all { it in '\u3041'..'\u3096' || it == 'ー' }) {
             clearComposingSuggestions()
             return
         }
 
         // Never leave the bar blank while waiting for the dictionary.
-        candidates = validReadings
-            .flatMap { SimpleConverter().query(it).take(2) }
-            .distinct()
-            .take(5)
+        candidates = SimpleConverter().query(reading).take(2)
         selectedCandidateIndex = 0
         candidatesRoot?.visibility = View.VISIBLE
         segmentControls?.visibility = View.GONE
@@ -619,17 +618,10 @@ class JapaneseKeyboardService : InputMethodService() {
 
         val task = Runnable {
             convExecutor.execute {
-                val result = LinkedHashSet<String>()
-                // Keep possible kana completions visible, then fill remaining slots
-                // with dictionary conversions for those readings.
-                result.addAll(validReadings)
-                for (reading in validReadings) {
-                    val found = try { converter.query(reading, 5, true) } catch (_: Throwable) { emptyList() }
-                    result.addAll(found.drop(2))
-                }
+                val result = try { converter.query(reading, 5, true) } catch (_: Throwable) { emptyList() }
                 repeatHandler.post {
-                    if (!isInConversion() && suggestionQuerySeq == token && romaji.getSuggestionReadings() == readings) {
-                        candidates = result.take(5)
+                    if (!isInConversion() && suggestionQuerySeq == token && romaji.getComposing() == reading) {
+                        candidates = result
                         selectedCandidateIndex = 0
                         updateCandidatesUI()
                     }
@@ -910,7 +902,7 @@ class JapaneseKeyboardService : InputMethodService() {
         romaji.restoreFromKana(reading)
         segments = null
         ic.setComposingText(reading, 1)
-        scheduleComposingSuggestions(listOf(reading))
+        scheduleComposingSuggestions(reading)
     }
 
     private fun showCandidatesUI() {

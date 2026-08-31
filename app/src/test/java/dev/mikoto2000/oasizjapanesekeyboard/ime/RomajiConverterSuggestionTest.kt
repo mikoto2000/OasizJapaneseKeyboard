@@ -1,35 +1,62 @@
 package dev.mikoto2000.oasizjapanesekeyboard.ime
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RomajiConverterSuggestionTest {
     @Test
-    fun suggestsKanaBeforeVowelIsEntered() {
-        val converter = RomajiConverter()
-        converter.pushChar('k')
+    fun convertsExtendedRomajiSequences() {
+        val cases = mapOf(
+            "tyu" to "ちゅ",
+            "thu" to "てゅ",
+            "thi" to "てぃ",
+            "dhu" to "でゅ",
+            "she" to "しぇ",
+            "che" to "ちぇ",
+            "je" to "じぇ",
+            "ltsu" to "っ",
+        )
 
-        val readings = converter.getSuggestionReadings()
-
-        assertTrue("か" in readings)
-        assertTrue("き" in readings)
-        assertTrue("く" in readings)
+        for ((romaji, expected) in cases) {
+            val converter = RomajiConverter()
+            romaji.forEach(converter::pushChar)
+            assertEquals(romaji, expected, converter.getComposing())
+        }
     }
 
     @Test
-    fun appendsUnfinishedRomajiSuggestionToConvertedKana() {
+    fun keepsSecondNForFollowingSyllable() {
         val converter = RomajiConverter()
-        "toky".forEach(converter::pushChar)
+        "konnichiha".forEach(converter::pushChar)
 
-        assertEquals(listOf("ときゃ", "ときゅ", "ときょ"), converter.getSuggestionReadings())
+        assertEquals("こんにちは", converter.getComposing())
     }
 
     @Test
-    fun singleNIncludesFinalNReading() {
+    fun flushesDoubleNAsSingleKanaN() {
         val converter = RomajiConverter()
-        "hon".forEach(converter::pushChar)
+        "nn".forEach(converter::pushChar)
 
-        assertTrue("ほん" in converter.getSuggestionReadings())
+        assertEquals("ん", converter.flush())
+    }
+
+    @Test
+    fun appendsProlongedSoundMarkWithoutFinishingComposition() {
+        val converter = RomajiConverter()
+        "ko".forEach(converter::pushChar)
+
+        converter.appendKana("ー")
+
+        assertEquals("こー", converter.getComposing())
+    }
+
+    @Test
+    fun finalizesPendingNBeforeProlongedSoundMark() {
+        val converter = RomajiConverter()
+        "kon".forEach(converter::pushChar)
+
+        converter.appendKana("ー")
+
+        assertEquals("こんー", converter.getComposing())
     }
 }

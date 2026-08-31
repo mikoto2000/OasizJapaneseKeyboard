@@ -21,14 +21,20 @@ class RomajiConverter {
         // K
         "ka" to "か", "ki" to "き", "ku" to "く", "ke" to "け", "ko" to "こ",
         "kya" to "きゃ", "kyu" to "きゅ", "kyo" to "きょ",
+        "kwa" to "くぁ", "kwi" to "くぃ", "kwu" to "くぅ", "kwe" to "くぇ", "kwo" to "くぉ",
 
         // S
         "sa" to "さ", "shi" to "し", "si" to "し", "su" to "す", "se" to "せ", "so" to "そ",
-        "sha" to "しゃ", "shu" to "しゅ", "sho" to "しょ",
+        "sha" to "しゃ", "shu" to "しゅ", "she" to "しぇ", "sho" to "しょ",
+        "sya" to "しゃ", "syu" to "しゅ", "syo" to "しょ",
 
         // T
         "ta" to "た", "chi" to "ち", "ti" to "ち", "tsu" to "つ", "tu" to "つ", "te" to "て", "to" to "と",
-        "cha" to "ちゃ", "chu" to "ちゅ", "cho" to "ちょ",
+        "cha" to "ちゃ", "chu" to "ちゅ", "che" to "ちぇ", "cho" to "ちょ",
+        "cya" to "ちゃ", "cyu" to "ちゅ", "cyo" to "ちょ",
+        "tya" to "ちゃ", "tyi" to "ちぃ", "tyu" to "ちゅ", "tye" to "ちぇ", "tyo" to "ちょ",
+        "tha" to "てゃ", "thi" to "てぃ", "thu" to "てゅ", "the" to "てぇ", "tho" to "てょ",
+        "tsa" to "つぁ", "tsi" to "つぃ", "tse" to "つぇ", "tso" to "つぉ",
 
         // N
         "na" to "な", "ni" to "に", "nu" to "ぬ", "ne" to "ね", "no" to "の",
@@ -50,19 +56,23 @@ class RomajiConverter {
         "rya" to "りゃ", "ryu" to "りゅ", "ryo" to "りょ",
 
         // W
-        "wa" to "わ", "wo" to "を",
+        "wa" to "わ", "wi" to "うぃ", "we" to "うぇ", "wo" to "を",
 
         // G
         "ga" to "が", "gi" to "ぎ", "gu" to "ぐ", "ge" to "げ", "go" to "ご",
         "gya" to "ぎゃ", "gyu" to "ぎゅ", "gyo" to "ぎょ",
+        "gwa" to "ぐぁ", "gwi" to "ぐぃ", "gwu" to "ぐぅ", "gwe" to "ぐぇ", "gwo" to "ぐぉ",
 
         // Z/J
         "za" to "ざ", "zi" to "じ", "ji" to "じ", "zu" to "ず", "ze" to "ぜ", "zo" to "ぞ",
-        "ja" to "じゃ", "ju" to "じゅ", "jo" to "じょ",
+        "ja" to "じゃ", "ju" to "じゅ", "je" to "じぇ", "jo" to "じょ",
+        "zya" to "じゃ", "zyu" to "じゅ", "zyo" to "じょ",
+        "jya" to "じゃ", "jyu" to "じゅ", "jyo" to "じょ",
 
         // D
         "da" to "だ", "di" to "ぢ", "du" to "づ", "de" to "で", "do" to "ど",
         "dya" to "ぢゃ", "dyu" to "ぢゅ", "dyo" to "ぢょ",
+        "dha" to "でゃ", "dhi" to "でぃ", "dhu" to "でゅ", "dhe" to "でぇ", "dho" to "でょ",
 
         // B
         "ba" to "ば", "bi" to "び", "bu" to "ぶ", "be" to "べ", "bo" to "ぼ",
@@ -73,11 +83,20 @@ class RomajiConverter {
         "pya" to "ぴゃ", "pyu" to "ぴゅ", "pyo" to "ぴょ",
 
         // F (extended)
-        "fa" to "ふぁ", "fi" to "ふぃ", "fe" to "ふぇ", "fo" to "ふぉ",
+        "fa" to "ふぁ", "fi" to "ふぃ", "fyu" to "ふゅ", "fe" to "ふぇ", "fo" to "ふぉ",
+
+        // V (extended)
+        "va" to "ゔぁ", "vi" to "ゔぃ", "vu" to "ゔ", "ve" to "ゔぇ", "vo" to "ゔぉ",
+        "vya" to "ゔゃ", "vyu" to "ゔゅ", "vyo" to "ゔょ",
 
         // Small vowels (optional)
-        "xa" to "ぁ", "xi" to "ぃ", "xu" to "ぅ", "xe" to "ぇ", "xo" to "ぉ"
+        "xa" to "ぁ", "xi" to "ぃ", "xu" to "ぅ", "xe" to "ぇ", "xo" to "ぉ",
+        "la" to "ぁ", "li" to "ぃ", "lu" to "ぅ", "le" to "ぇ", "lo" to "ぉ",
+        "xya" to "ゃ", "xyu" to "ゅ", "xyo" to "ょ",
+        "lya" to "ゃ", "lyu" to "ゅ", "lyo" to "ょ",
+        "xtu" to "っ", "ltu" to "っ", "ltsu" to "っ"
     )
+    private val maxMapKeyLength = map.keys.maxOf { it.length }
 
     fun clear() {
         produced.clear()
@@ -108,27 +127,6 @@ class RomajiConverter {
         return produced.toString() + buffer.toString()
     }
 
-    /**
-     * Kana readings that the current, possibly unfinished, romaji can become.
-     * This allows prediction after `k`/`ky`, before the following vowel is typed.
-     */
-    fun getSuggestionReadings(maxResults: Int = 6): List<String> {
-        if (maxResults <= 0) return emptyList()
-        val prefix = produced.toString()
-        if (buffer.isEmpty()) return if (prefix.isEmpty()) emptyList() else listOf(prefix)
-
-        val pending = buffer.toString()
-        val readings = LinkedHashSet<String>()
-        if (pending == "n") readings += prefix + "ん"
-        for ((romaji, kana) in map) {
-            if (romaji.startsWith(pending)) {
-                readings += prefix + kana
-                if (readings.size >= maxResults) break
-            }
-        }
-        return readings.toList()
-    }
-
     fun flush(): String {
         // Finalize pending buffer (resolve 'n' to ん, and emit any leftover romaji literally)
         finalizeN()
@@ -141,6 +139,16 @@ class RomajiConverter {
         produced.setLength(0)
         produced.append(kana)
         buffer.setLength(0)
+    }
+
+    /** Adds a kana symbol without committing the current composition. */
+    fun appendKana(text: String) {
+        finalizeN()
+        if (buffer.isNotEmpty()) {
+            produced.append(buffer)
+            buffer.clear()
+        }
+        produced.append(text)
     }
 
     private fun consume() {
@@ -157,10 +165,12 @@ class RomajiConverter {
                 }
             }
 
-            // Handle 'nn' -> ん
+            // Keep the second n so `nna` becomes `んな`. With exactly `nn`, wait
+            // for the next key; flush() resolves it to a single ん.
             if (buffer.startsWith("nn")) {
+                if (buffer.length == 2) break
                 produced.append('ん')
-                buffer.delete(0, 2)
+                buffer.deleteCharAt(0)
                 continue
             }
 
@@ -174,13 +184,11 @@ class RomajiConverter {
                 }
             }
 
-            // Try longest romaji match (3 -> 2 -> 1)
-            val consumed = when {
-                buffer.length >= 3 && map.containsKey(buffer.substring(0, 3)) -> 3
-                buffer.length >= 2 && map.containsKey(buffer.substring(0, 2)) -> 2
-                buffer.length >= 1 && map.containsKey(buffer.substring(0, 1)) -> 1
-                else -> 0
-            }
+            // Try the longest registered romaji sequence first.
+            val maxTry = minOf(buffer.length, maxMapKeyLength)
+            val consumed = (maxTry downTo 1).firstOrNull {
+                map.containsKey(buffer.substring(0, it))
+            } ?: 0
             if (consumed > 0) {
                 val key = buffer.substring(0, consumed)
                 val kana = map[key]!!
@@ -193,7 +201,7 @@ class RomajiConverter {
     }
 
     private fun finalizeN() {
-        if (buffer.toString() == "n") {
+        if (buffer.toString() == "n" || buffer.toString() == "nn") {
             produced.append('ん')
             buffer.clear()
         }
