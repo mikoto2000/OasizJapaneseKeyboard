@@ -21,9 +21,11 @@
 
         <!-- Segment row: adjust buttons + chips (horizontal scroll) -->
         <LinearLayout
+            android:id="@+id/segment_controls"
             android:layout_width="match_parent"
             android:layout_height="40dp"
             android:orientation="horizontal"
+            android:visibility="gone"
             android:gravity="center_vertical">
 
             <Button

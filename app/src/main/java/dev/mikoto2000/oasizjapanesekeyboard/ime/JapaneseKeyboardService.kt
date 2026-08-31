@@ -16,6 +16,7 @@ import dev.mikoto2000.oasizjapanesekeyboard.R
 class JapaneseKeyboardService : InputMethodService() {
     private companion object {
         const val REMAINING_CANDIDATES_DELAY_MS = 120L
+        const val COMPOSING_SUGGESTION_DELAY_MS = 35L
     }
 
     private var shiftOn = false
@@ -31,6 +32,7 @@ class JapaneseKeyboardService : InputMethodService() {
     private val letterButtons = mutableListOf<Button>()
     private val symbolButtons = mutableListOf<Pair<Button, String>>()
     private var fnVisible = true
+    private var functionRow: View? = null
 
     // Kana composing state
     private var kanaMode = false // default: ASCII mode
@@ -40,7 +42,10 @@ class JapaneseKeyboardService : InputMethodService() {
     private var conversionReading: String? = null
     private var candidates: List<String> = emptyList()
     private var selectedCandidateIndex: Int = 0
+    private var suggestionQuerySeq: Long = 0L
+    private var suggestionTask: Runnable? = null
     private var candidatesRoot: View? = null
+    private var segmentControls: View? = null
     private var segmentList: ViewGroup? = null
     private var candidateContainer: View? = null
     private var candidateList: ViewGroup? = null
@@ -253,12 +258,12 @@ class JapaneseKeyboardService : InputMethodService() {
         }
 
         // Fn toggle (left of space): show/hide top function row
-        val fnRow = root.findViewById<View>(R.id.row_fn)
-        fnRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
+        functionRow = root.findViewById(R.id.row_fn)
+        functionRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
         root.findViewById<Button>(R.id.key_fn_toggle)?.let { btn ->
             btn.setOnClickListener {
                 fnVisible = !fnVisible
-                fnRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
+                functionRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
                 updateFnToggleUI(btn)
             }
             updateFnToggleUI(btn)
@@ -276,6 +281,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
         // Candidate views
         candidatesRoot = root.findViewById(R.id.candidates_root)
+        segmentControls = root.findViewById(R.id.segment_controls)
         segmentList = root.findViewById(R.id.segment_list)
         candidateContainer = root.findViewById(R.id.candidate_container)
         candidateList = root.findViewById(R.id.candidate_list)
@@ -529,6 +535,7 @@ class JapaneseKeyboardService : InputMethodService() {
             }
             if (romaji.hasComposing()) {
                 val text = romaji.flush()
+                clearComposingSuggestions()
                 ic.commitText(text, 1)
                 ic.finishComposingText()
                 return
@@ -562,6 +569,7 @@ class JapaneseKeyboardService : InputMethodService() {
                 }
                 // Invalidate any in-flight conversion queries
                 convQuerySeq++
+                clearComposingSuggestions()
             }
         }
     }
@@ -576,8 +584,85 @@ class JapaneseKeyboardService : InputMethodService() {
         val text = romaji.getComposing()
         if (text.isEmpty()) {
             ic.finishComposingText()
+            clearComposingSuggestions()
         } else {
             ic.setComposingText(text, 1)
+            scheduleComposingSuggestions(romaji.getSuggestionReadings())
+        }
+    }
+
+    private fun scheduleComposingSuggestions(readings: List<String>) {
+        suggestionTask?.let { repeatHandler.removeCallbacks(it) }
+        suggestionQuerySeq++
+        val token = suggestionQuerySeq
+
+        val validReadings = readings
+            .filter { reading -> reading.isNotEmpty() && reading.all { it in '\u3041'..'\u3096' || it == 'ー' } }
+            .distinct()
+            .take(6)
+        if (validReadings.isEmpty()) {
+            clearComposingSuggestions()
+            return
+        }
+
+        // Never leave the bar blank while waiting for the dictionary.
+        candidates = validReadings
+            .flatMap { SimpleConverter().query(it).take(2) }
+            .distinct()
+            .take(5)
+        selectedCandidateIndex = 0
+        candidatesRoot?.visibility = View.VISIBLE
+        segmentControls?.visibility = View.GONE
+        functionRow?.visibility = View.GONE
+        segmentList?.removeAllViews()
+        updateCandidatesUI()
+
+        val task = Runnable {
+            convExecutor.execute {
+                val result = LinkedHashSet<String>()
+                // Keep possible kana completions visible, then fill remaining slots
+                // with dictionary conversions for those readings.
+                result.addAll(validReadings)
+                for (reading in validReadings) {
+                    val found = try { converter.query(reading, 5, true) } catch (_: Throwable) { emptyList() }
+                    result.addAll(found.drop(2))
+                }
+                repeatHandler.post {
+                    if (!isInConversion() && suggestionQuerySeq == token && romaji.getSuggestionReadings() == readings) {
+                        candidates = result.take(5)
+                        selectedCandidateIndex = 0
+                        updateCandidatesUI()
+                    }
+                }
+            }
+        }
+        suggestionTask = task
+        repeatHandler.postDelayed(task, COMPOSING_SUGGESTION_DELAY_MS)
+    }
+
+    private fun clearComposingSuggestions() {
+        suggestionTask?.let { repeatHandler.removeCallbacks(it) }
+        suggestionTask = null
+        suggestionQuerySeq++
+        if (!isInConversion()) {
+            candidates = emptyList()
+            hideCandidatesUI()
+        }
+    }
+
+    private fun commitComposingSuggestion(index: Int) {
+        if (isInConversion()) return
+        val reading = romaji.getComposing()
+        val selected = candidates.getOrNull(index) ?: return
+        if (reading.isEmpty()) return
+        currentInputConnection?.commitText(selected, 1)
+        currentInputConnection?.finishComposingText()
+        romaji.clear()
+        clearComposingSuggestions()
+        if (reading.all { it in '\u3041'..'\u3096' || it == 'ー' }) {
+            predictionExecutor.execute {
+                try { converter.recordSelection(reading, selected) } catch (_: Throwable) {}
+            }
         }
     }
 
@@ -603,6 +688,7 @@ class JapaneseKeyboardService : InputMethodService() {
         if (romaji.hasComposing()) {
             val ic = currentInputConnection ?: return
             val text = romaji.flush()
+            clearComposingSuggestions()
             ic.commitText(text, 1)
             ic.finishComposingText()
         }
@@ -623,6 +709,7 @@ class JapaneseKeyboardService : InputMethodService() {
         val ic = currentInputConnection ?: return
         val reading = romaji.flush()
         if (reading.isEmpty()) return
+        clearComposingSuggestions()
         conversionReading = reading
         // start new conversion session (invalidate in-flight queries)
         convQuerySeq++
@@ -821,17 +908,23 @@ class JapaneseKeyboardService : InputMethodService() {
         convQuerySeq++
         candidates = emptyList()
         romaji.restoreFromKana(reading)
+        segments = null
         ic.setComposingText(reading, 1)
+        scheduleComposingSuggestions(listOf(reading))
     }
 
     private fun showCandidatesUI() {
         candidatesRoot?.visibility = View.VISIBLE
+        segmentControls?.visibility = View.VISIBLE
+        functionRow?.visibility = View.GONE
         updateSegmentsUI()
         updateCandidatesUI()
     }
 
     private fun hideCandidatesUI() {
         candidatesRoot?.visibility = View.GONE
+        segmentControls?.visibility = View.GONE
+        functionRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
         candidateList?.removeAllViews()
         segmentList?.removeAllViews()
     }
@@ -892,7 +985,7 @@ class JapaneseKeyboardService : InputMethodService() {
                 btn.text = if (index == selectedCandidateIndex) "•$cand" else cand
                 btn.setOnClickListener {
                     selectedCandidateIndex = index
-                    commitSelectedCandidate()
+                    commitComposingSuggestion(index)
                 }
                 list.addView(btn)
             }

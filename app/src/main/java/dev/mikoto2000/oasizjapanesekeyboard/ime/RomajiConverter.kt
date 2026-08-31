@@ -108,6 +108,27 @@ class RomajiConverter {
         return produced.toString() + buffer.toString()
     }
 
+    /**
+     * Kana readings that the current, possibly unfinished, romaji can become.
+     * This allows prediction after `k`/`ky`, before the following vowel is typed.
+     */
+    fun getSuggestionReadings(maxResults: Int = 6): List<String> {
+        if (maxResults <= 0) return emptyList()
+        val prefix = produced.toString()
+        if (buffer.isEmpty()) return if (prefix.isEmpty()) emptyList() else listOf(prefix)
+
+        val pending = buffer.toString()
+        val readings = LinkedHashSet<String>()
+        if (pending == "n") readings += prefix + "ん"
+        for ((romaji, kana) in map) {
+            if (romaji.startsWith(pending)) {
+                readings += prefix + kana
+                if (readings.size >= maxResults) break
+            }
+        }
+        return readings.toList()
+    }
+
     fun flush(): String {
         // Finalize pending buffer (resolve 'n' to ん, and emit any leftover romaji literally)
         finalizeN()
