@@ -112,6 +112,11 @@ class JapaneseKeyboardService : InputMethodService() {
         }
     }
 
+    override fun onFinishInput() {
+        finishCurrentInputSession()
+        super.onFinishInput()
+    }
+
     override fun onCreateInputView(): View {
         val root = layoutInflater.inflate(R.layout.keyboard_jis_qwerty, null)
         rootViewRef = root
@@ -693,6 +698,28 @@ class JapaneseKeyboardService : InputMethodService() {
         } else {
             flushComposingIfNeeded()
         }
+    }
+
+    private fun finishCurrentInputSession() {
+        flushComposingOrConversionIfNeeded()
+        currentInputConnection?.finishComposingText()
+
+        suggestionTask?.let { repeatHandler.removeCallbacks(it) }
+        suggestionTask = null
+        for (task in repeatTasks.values) {
+            repeatHandler.removeCallbacks(task)
+        }
+        repeatTasks.clear()
+
+        romaji.clear()
+        conversionReading = null
+        candidates = emptyList()
+        selectedCandidateIndex = 0
+        segments = null
+        segmentFocus = 0
+        convQuerySeq++
+        suggestionQuerySeq++
+        hideCandidatesUI()
     }
 
     private fun isInConversion(): Boolean = conversionReading != null
