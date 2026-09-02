@@ -1,7 +1,9 @@
 package dev.mikoto2000.oasizjapanesekeyboard.ime
 
 import android.inputmethodservice.InputMethodService
+import android.content.Context
 import android.view.KeyEvent
+import android.view.Gravity
 import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
@@ -10,6 +12,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.PopupMenu
+import android.widget.PopupWindow
+import android.widget.TextView
 import java.util.concurrent.Executors
 import dev.mikoto2000.oasizjapanesekeyboard.R
 
@@ -17,6 +22,11 @@ class JapaneseKeyboardService : InputMethodService() {
     private companion object {
         const val REMAINING_CANDIDATES_DELAY_MS = 120L
         const val COMPOSING_SUGGESTION_DELAY_MS = 35L
+        const val PREFS_NAME = "japanese_keyboard_service"
+        const val PREF_KEY_LAYOUT_MODE = "layout_mode"
+        const val LAYOUT_JIS_QWERTY = "jis_qwerty"
+        const val LAYOUT_KANA_12_SWIPE = "kana_12_swipe"
+        const val LAYOUT_KANA_12_SYMBOL = "kana_12_symbol"
     }
 
     private var shiftOn = false
@@ -33,6 +43,11 @@ class JapaneseKeyboardService : InputMethodService() {
     private val symbolButtons = mutableListOf<Pair<Button, String>>()
     private var fnVisible = true
     private var functionRow: View? = null
+    private var layoutMode = LAYOUT_JIS_QWERTY
+    private var flickGuidePopup: PopupWindow? = null
+    private var symbolPageIndex = 0
+    private val symbolPageButtons = mutableListOf<Button>()
+    private var symbolPageButton: Button? = null
 
     // Kana composing state
     private var kanaMode = false // default: ASCII mode
@@ -97,6 +112,9 @@ class JapaneseKeyboardService : InputMethodService() {
 
     override fun onCreate() {
         super.onCreate()
+        layoutMode = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(PREF_KEY_LAYOUT_MODE, LAYOUT_JIS_QWERTY) ?: LAYOUT_JIS_QWERTY
+        kanaMode = layoutMode != LAYOUT_JIS_QWERTY
         sqliteConverter = try {
             SqliteDictionaryConverter(this).also { converter ->
                 convExecutor.execute {
@@ -118,8 +136,12 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     override fun onCreateInputView(): View {
-        val root = layoutInflater.inflate(R.layout.keyboard_jis_qwerty, null)
+        val root = layoutInflater.inflate(currentKeyboardLayoutRes(), null)
         rootViewRef = root
+        letterButtons.clear()
+        symbolButtons.clear()
+        symbolPageButtons.clear()
+        symbolPageButton = null
         // Initialize converter: prefer SQLite dictionary; fallback to TSV; then to simple built-in
         converter = sqliteConverter ?: try {
             DictionaryConverter(this)
@@ -203,7 +225,11 @@ class JapaneseKeyboardService : InputMethodService() {
         // Language toggle (A <-> あ)
         langBtn = root.findViewById<Button>(R.id.key_lang_toggle)
         langBtn?.setOnClickListener {
-            toggleKanaMode()
+            if (layoutMode != LAYOUT_JIS_QWERTY) {
+                showLayoutModeMenu(it)
+            } else {
+                toggleKanaMode()
+            }
         }
         updateLangToggleUI()
 
@@ -264,12 +290,20 @@ class JapaneseKeyboardService : InputMethodService() {
 
         // Fn toggle (left of space): show/hide top function row
         functionRow = root.findViewById(R.id.row_fn)
-        functionRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
+        functionRow?.visibility = functionRowVisibility()
         root.findViewById<Button>(R.id.key_fn_toggle)?.let { btn ->
             btn.setOnClickListener {
-                fnVisible = !fnVisible
-                functionRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
-                updateFnToggleUI(btn)
+                if (layoutMode != LAYOUT_JIS_QWERTY) {
+                    showLayoutModeMenu(btn)
+                } else {
+                    fnVisible = !fnVisible
+                    functionRow?.visibility = functionRowVisibility()
+                    updateFnToggleUI(btn)
+                }
+            }
+            btn.setOnLongClickListener {
+                showLayoutModeMenu(btn)
+                true
             }
             updateFnToggleUI(btn)
         }
@@ -301,8 +335,17 @@ class JapaneseKeyboardService : InputMethodService() {
 
         // Apply initial backgrounds to all keys
         applyKeyBackgrounds()
+        updateSymbolPageKeys()
 
         return root
+    }
+
+    private fun currentKeyboardLayoutRes(): Int {
+        return when (layoutMode) {
+            LAYOUT_KANA_12_SWIPE -> R.layout.keyboard_kana_12_swipe
+            LAYOUT_KANA_12_SYMBOL -> R.layout.keyboard_kana_12_symbol
+            else -> R.layout.keyboard_jis_qwerty
+        }
     }
 
     private fun wireKeysRecursively(view: View) {
@@ -356,6 +399,126 @@ class JapaneseKeyboardService : InputMethodService() {
                         commitText(out)
                         if (!kanaMode) consumeOneShotModifiers()
                     }
+                }
+                tag.startsWith("kana_flick:") -> {
+                    val parts = tag.removePrefix("kana_flick:").split(":")
+                    if (parts.size >= 5) {
+                        val flick = KanaFlickKey(
+                            center = parts[0],
+                            left = parts[1],
+                            up = parts[2],
+                            right = parts[3],
+                            down = parts[4]
+                        )
+                        view.text = flick.center
+                        setKanaFlickKey(view, flick)
+                    }
+                }
+                tag == "action:kana_modifier" -> {
+                    view.setOnClickListener {
+                        applyKanaModifier()
+                    }
+                }
+                tag.startsWith("action:commit:") -> {
+                    val text = tag.removePrefix("action:commit:")
+                    view.setOnClickListener {
+                        flushComposingOrConversionIfNeeded()
+                        commitText(text)
+                    }
+                }
+                tag == "action:switch_jis_qwerty" -> {
+                    view.setOnClickListener {
+                        switchLayoutMode(LAYOUT_JIS_QWERTY)
+                    }
+                }
+                tag == "action:mode_menu" -> {
+                    view.setOnClickListener {
+                        showLayoutModeMenu(view)
+                    }
+                }
+                tag == "action:esc" -> {
+                    setRepeatableKey(view) {
+                        flushComposingOrConversionIfNeeded()
+                        sendSimpleKey(KeyEvent.KEYCODE_ESCAPE)
+                        consumeOneShotModifiers()
+                    }
+                }
+                tag == "action:switch_kana_12_swipe" -> {
+                    view.setOnClickListener {
+                        switchLayoutMode(LAYOUT_KANA_12_SWIPE)
+                    }
+                }
+                tag == "action:switch_kana_12_symbol" -> {
+                    view.setOnClickListener {
+                        switchLayoutMode(LAYOUT_KANA_12_SYMBOL)
+                    }
+                }
+                tag == "action:symbol_page_next" -> {
+                    symbolPageButton = view
+                    view.setOnClickListener {
+                        symbolPageIndex = (symbolPageIndex + 1) % symbolPages.size
+                        updateSymbolPageKeys()
+                    }
+                }
+                tag == "symbol_slot" -> {
+                    symbolPageButtons.add(view)
+                }
+            }
+        }
+    }
+
+    private data class KanaFlickKey(
+        val center: String,
+        val left: String,
+        val up: String,
+        val right: String,
+        val down: String
+    )
+
+    private enum class FlickDirection {
+        Center, Left, Up, Right, Down
+    }
+
+    private val symbolPages: List<List<String>> = listOf(
+        listOf(
+            "、", "。", "？", "！",
+            "・", "…", "〜", "ー",
+            "「", "」", "『", "』",
+            "（", "）", "［", "］",
+            "｛", "｝", "〈", "〉",
+            "《"
+        ),
+        listOf(
+            "@", "#", "￥", "$",
+            "%", "&", "*", "+",
+            "-", "=", "/", "\\",
+            ":", ";", "\"", "'",
+            "^", "_", "|", "※",
+            "~"
+        ),
+        listOf(
+            "〒", "々", "〆", "ヶ",
+            "○", "◎", "△", "□",
+            "☆", "★", "♪", "→",
+            "←", "↑", "↓", "⇔",
+            "℃", "￥", "€", "£",
+            "》"
+        )
+    )
+
+    private fun updateSymbolPageKeys() {
+        if (symbolPageButtons.isEmpty()) return
+        val page = symbolPages[symbolPageIndex.coerceIn(0, symbolPages.lastIndex)]
+        symbolPageButton?.text = "記号${symbolPageIndex + 1}/${symbolPages.size}"
+        symbolPageButtons.forEachIndexed { index, btn ->
+            val symbol = page.getOrNull(index)
+            btn.text = symbol ?: ""
+            btn.isEnabled = symbol != null
+            btn.alpha = if (symbol != null) 1.0f else 0.35f
+            btn.setOnClickListener {
+                if (symbol != null) {
+                    flushComposingOrConversionIfNeeded()
+                    commitText(symbol)
                 }
             }
         }
@@ -437,8 +600,52 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     private fun updateFnToggleUI(btn: Button) {
-        btn.text = if (fnVisible) "Fn ON" else "Fn OFF"
-        btn.isSelected = fnVisible
+        if (layoutMode != LAYOUT_JIS_QWERTY) {
+            btn.text = if (layoutMode == LAYOUT_KANA_12_SYMBOL) "記号" else "12 ON"
+            btn.isSelected = true
+        } else {
+            btn.text = if (fnVisible) "Fn ON" else "Fn OFF"
+            btn.isSelected = fnVisible
+        }
+    }
+
+    private fun functionRowVisibility(): Int {
+        return if (layoutMode != LAYOUT_JIS_QWERTY) {
+            View.GONE
+        } else if (fnVisible) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+    }
+
+    private fun showLayoutModeMenu(anchor: View) {
+        val menu = PopupMenu(this, anchor)
+        menu.menu.add(0, 1, 0, "JIS QWERTY")
+        menu.menu.add(0, 2, 1, "スワイプ入力 (12キー)")
+        menu.menu.add(0, 3, 2, "記号入力")
+        menu.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> switchLayoutMode(LAYOUT_JIS_QWERTY)
+                2 -> switchLayoutMode(LAYOUT_KANA_12_SWIPE)
+                3 -> switchLayoutMode(LAYOUT_KANA_12_SYMBOL)
+            }
+            true
+        }
+        menu.show()
+    }
+
+    private fun switchLayoutMode(mode: String) {
+        if (layoutMode == mode) return
+        flushComposingOrConversionIfNeeded()
+        hideKanaFlickGuide()
+        layoutMode = mode
+        kanaMode = mode != LAYOUT_JIS_QWERTY
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_KEY_LAYOUT_MODE, mode)
+            .apply()
+        setInputView(onCreateInputView())
     }
 
     private fun consumeOneShotModifiers() {
@@ -482,6 +689,117 @@ class JapaneseKeyboardService : InputMethodService() {
                 else -> false
             }
         }
+    }
+
+    private fun setKanaFlickKey(button: Button, flick: KanaFlickKey) {
+        val threshold = dp(26).toFloat()
+        var downX = 0f
+        var downY = 0f
+        var currentDirection = FlickDirection.Center
+
+        fun directionFor(ev: MotionEvent): FlickDirection {
+            val dx = ev.x - downX
+            val dy = ev.y - downY
+            if (kotlin.math.hypot(dx.toDouble(), dy.toDouble()) < threshold) {
+                return FlickDirection.Center
+            }
+            return if (kotlin.math.abs(dx) > kotlin.math.abs(dy)) {
+                if (dx < 0f) FlickDirection.Left else FlickDirection.Right
+            } else {
+                if (dy < 0f) FlickDirection.Up else FlickDirection.Down
+            }
+        }
+
+        button.setOnTouchListener { v, ev ->
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.isPressed = true
+                    downX = ev.x
+                    downY = ev.y
+                    currentDirection = FlickDirection.Center
+                    showKanaFlickGuide(button, flick, currentDirection)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val nextDirection = directionFor(ev)
+                    if (nextDirection != currentDirection) {
+                        currentDirection = nextDirection
+                        showKanaFlickGuide(button, flick, currentDirection)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.isPressed = false
+                    hideKanaFlickGuide()
+                    handleKanaText(flickTextFor(flick, directionFor(ev)))
+                    true
+                }
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
+                    v.isPressed = false
+                    hideKanaFlickGuide()
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun flickTextFor(flick: KanaFlickKey, direction: FlickDirection): String {
+        return when (direction) {
+            FlickDirection.Center -> flick.center
+            FlickDirection.Left -> flick.left
+            FlickDirection.Up -> flick.up
+            FlickDirection.Right -> flick.right
+            FlickDirection.Down -> flick.down
+        }
+    }
+
+    private fun showKanaFlickGuide(anchor: View, flick: KanaFlickKey, selected: FlickDirection) {
+        val label = buildString {
+            append("  ")
+            append(markFlickLabel(flick.up, selected == FlickDirection.Up))
+            append("\n")
+            append(markFlickLabel(flick.left, selected == FlickDirection.Left))
+            append("  ")
+            append(markFlickLabel(flick.center, selected == FlickDirection.Center))
+            append("  ")
+            append(markFlickLabel(flick.right, selected == FlickDirection.Right))
+            append("\n")
+            append("  ")
+            append(markFlickLabel(flick.down, selected == FlickDirection.Down))
+        }
+        val popup = flickGuidePopup ?: PopupWindow(this).also {
+            it.isClippingEnabled = false
+            flickGuidePopup = it
+        }
+        val textView = TextView(this).apply {
+            text = label
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setTextColor(0xFF111111.toInt())
+            setBackgroundColor(0xF7FFFFFF.toInt())
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+        }
+        popup.contentView = textView
+        popup.width = dp(128)
+        popup.height = dp(112)
+        if (popup.isShowing) {
+            popup.update(anchor, -dp(40), -dp(118), popup.width, popup.height)
+        } else {
+            popup.showAsDropDown(anchor, -dp(40), -dp(118), Gravity.NO_GRAVITY)
+        }
+    }
+
+    private fun markFlickLabel(text: String, selected: Boolean): String {
+        return if (selected) "[$text]" else " $text "
+    }
+
+    private fun hideKanaFlickGuide() {
+        flickGuidePopup?.dismiss()
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density + 0.5f).toInt()
     }
 
     // One-shot and lock behavior removed; simple toggle with click.
@@ -586,6 +904,10 @@ class JapaneseKeyboardService : InputMethodService() {
     }
 
     private fun toggleKanaMode() {
+        if (layoutMode == LAYOUT_KANA_12_SWIPE) {
+            switchLayoutMode(LAYOUT_JIS_QWERTY)
+            return
+        }
         kanaMode = !kanaMode
         updateLangToggleUI()
     }
@@ -680,6 +1002,46 @@ class JapaneseKeyboardService : InputMethodService() {
         updateComposingText()
     }
 
+    private fun handleKanaText(text: String) {
+        if (text.isEmpty()) return
+        if (!kanaMode) {
+            commitText(text)
+            return
+        }
+        if (isInConversion()) {
+            cancelConversionRestore()
+        }
+        romaji.appendKana(text)
+        updateComposingText()
+    }
+
+    private fun applyKanaModifier() {
+        if (!kanaMode || !romaji.hasComposing()) return
+        if (isInConversion()) {
+            cancelConversionRestore()
+        }
+        val current = romaji.getComposing()
+        if (current.isEmpty()) return
+        val last = current.last()
+        val replacement = nextKanaVariant(last) ?: return
+        romaji.restoreFromKana(current.dropLast(1) + replacement)
+        updateComposingText()
+    }
+
+    private fun nextKanaVariant(ch: Char): Char? {
+        val cycles = listOf(
+            "あぁ", "いぃ", "うぅゔ", "えぇ", "おぉ",
+            "かが", "きぎ", "くぐ", "けげ", "こご",
+            "さざ", "しじ", "すず", "せぜ", "そぞ",
+            "ただ", "ちぢ", "つっづ", "てで", "とど",
+            "はばぱ", "ひびぴ", "ふぶぷ", "へべぺ", "ほぼぽ",
+            "やゃ", "ゆゅ", "よょ", "わゎ"
+        )
+        val cycle = cycles.firstOrNull { it.contains(ch) } ?: return null
+        val index = cycle.indexOf(ch)
+        return cycle[(index + 1) % cycle.length]
+    }
+
     private fun flushComposingIfNeeded() {
         if (!kanaMode) return
         if (romaji.hasComposing()) {
@@ -710,6 +1072,7 @@ class JapaneseKeyboardService : InputMethodService() {
             repeatHandler.removeCallbacks(task)
         }
         repeatTasks.clear()
+        hideKanaFlickGuide()
 
         romaji.clear()
         conversionReading = null
@@ -943,7 +1306,7 @@ class JapaneseKeyboardService : InputMethodService() {
     private fun hideCandidatesUI() {
         candidatesRoot?.visibility = View.GONE
         segmentControls?.visibility = View.GONE
-        functionRow?.visibility = if (fnVisible) View.VISIBLE else View.GONE
+        functionRow?.visibility = functionRowVisibility()
         candidateList?.removeAllViews()
         segmentList?.removeAllViews()
     }
@@ -1047,6 +1410,7 @@ class JapaneseKeyboardService : InputMethodService() {
 
     override fun onDestroy() {
         repeatHandler.removeCallbacksAndMessages(null)
+        hideKanaFlickGuide()
         try {
             sqliteConverter?.close()
         } catch (_: Exception) {

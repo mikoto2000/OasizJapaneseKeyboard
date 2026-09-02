@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="6dp"
+    android:paddingTop="4dp"
+    android:paddingEnd="6dp"
+    android:paddingBottom="4dp"
+    android:background="#EFEFEF">
+
+    <LinearLayout
+        android:id="@+id/candidates_root"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp">
+
+        <LinearLayout
+            android:id="@+id/segment_controls"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:orientation="horizontal"
+            android:visibility="gone"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/segment_shrink_right"
+                android:layout_width="40dp"
+                android:layout_height="match_parent"
+                android:text="‹" />
+
+            <HorizontalScrollView
+                android:id="@+id/segment_container"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:fillViewport="true">
+
+                <LinearLayout
+                    android:id="@+id/segment_list"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical" />
+            </HorizontalScrollView>
+
+            <Button
+                android:id="@+id/segment_expand_right"
+                android:layout_width="40dp"
+                android:layout_height="match_parent"
+                android:text="›" />
+        </LinearLayout>
+
+        <HorizontalScrollView
+            android:id="@+id/candidate_container"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:id="@+id/candidate_list"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center_vertical" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row_fn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <Button android:id="@+id/key_f1" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F1" />
+        <Button android:id="@+id/key_f2" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F2" />
+        <Button android:id="@+id/key_f3" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F3" />
+        <Button android:id="@+id/key_f4" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F4" />
+        <Button android:id="@+id/key_f5" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F5" />
+        <Button android:id="@+id/key_f6" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F6" />
+        <Button android:id="@+id/key_f7" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F7" />
+        <Button android:id="@+id/key_f8" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F8" />
+        <Button android:id="@+id/key_f9" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F9" />
+        <Button android:id="@+id/key_f10" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F10" />
+        <Button android:id="@+id/key_f11" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F11" />
+        <Button android:id="@+id/key_f12" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="F12" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <Button
+            android:id="@+id/key_esc"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="Esc" />
+
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="あ" android:tag="kana_flick:あ:い:う:え:お" />
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="か" android:tag="kana_flick:か:き:く:け:こ" />
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="さ" android:tag="kana_flick:さ:し:す:せ:そ" />
+
+        <Button
+            android:id="@+id/key_backspace"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="⌫" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <Button
+            android:id="@+id/key_arrow_left"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="←" />
+
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="た" android:tag="kana_flick:た:ち:つ:て:と" />
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="な" android:tag="kana_flick:な:に:ぬ:ね:の" />
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="は" android:tag="kana_flick:は:ひ:ふ:へ:ほ" />
+
+        <Button
+            android:id="@+id/key_arrow_right"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="→" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <Button
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="記号"
+            android:tag="action:switch_kana_12_symbol" />
+
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="ま" android:tag="kana_flick:ま:み:む:め:も" />
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="や" android:tag="kana_flick:や:「:ゆ:」:よ" />
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="ら" android:tag="kana_flick:ら:り:る:れ:ろ" />
+
+        <Button
+            android:id="@+id/key_enter"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="決定" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <Button
+            android:id="@+id/key_fn_toggle"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="12 ON" />
+
+        <Button
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="゛小゜"
+            android:tag="action:kana_modifier" />
+
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="わ" android:tag="kana_flick:わ:を:ん:ー:〜" />
+
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+            android:text="、。" android:tag="kana_flick:、:。:？:！:…" />
+
+        <Button
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_weight="1"
+            android:text="英数"
+            android:tag="action:mode_menu" />
+    </LinearLayout>
+
+</LinearLayout>
