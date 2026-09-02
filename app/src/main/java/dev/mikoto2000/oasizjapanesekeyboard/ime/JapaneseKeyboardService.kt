@@ -27,6 +27,7 @@ class JapaneseKeyboardService : InputMethodService() {
         const val LAYOUT_JIS_QWERTY = "jis_qwerty"
         const val LAYOUT_KANA_12_SWIPE = "kana_12_swipe"
         const val LAYOUT_KANA_12_SYMBOL = "kana_12_symbol"
+        const val LAYOUT_ENGLISH_12 = "english_12"
     }
 
     private var shiftOn = false
@@ -46,8 +47,14 @@ class JapaneseKeyboardService : InputMethodService() {
     private var layoutMode = LAYOUT_JIS_QWERTY
     private var flickGuidePopup: PopupWindow? = null
     private var symbolPageIndex = 0
-    private val symbolPageButtons = mutableListOf<Button>()
+    private val symbolPageButtons = mutableListOf<Pair<Button, Boolean>>()
     private var symbolPageButton: Button? = null
+    private val symbolNumberFlicks = listOf(
+        "1", "2", "3",
+        "4", "5", "6",
+        "7", "8", "9",
+        "!?#", "0", "="
+    )
 
     // Kana composing state
     private var kanaMode = false // default: ASCII mode
@@ -114,7 +121,7 @@ class JapaneseKeyboardService : InputMethodService() {
         super.onCreate()
         layoutMode = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(PREF_KEY_LAYOUT_MODE, LAYOUT_JIS_QWERTY) ?: LAYOUT_JIS_QWERTY
-        kanaMode = layoutMode != LAYOUT_JIS_QWERTY
+        kanaMode = isJapanese12Mode(layoutMode)
         sqliteConverter = try {
             SqliteDictionaryConverter(this).also { converter ->
                 convExecutor.execute {
@@ -204,6 +211,12 @@ class JapaneseKeyboardService : InputMethodService() {
             }
         }
         updateShiftUI()
+        if (layoutMode == LAYOUT_ENGLISH_12) {
+            (shiftBtn as? FlickKeyButton)?.let { btn ->
+                btn.setFlickHints(left = "", up = "", right = "", down = "⌫")
+                setCaseToggleOrDownDeleteKey(btn)
+            }
+        }
 
         shiftBtnRight = root.findViewById<Button>(R.id.key_shift_right)
         shiftBtnRight?.setOnClickListener {
@@ -344,6 +357,7 @@ class JapaneseKeyboardService : InputMethodService() {
         return when (layoutMode) {
             LAYOUT_KANA_12_SWIPE -> R.layout.keyboard_kana_12_swipe
             LAYOUT_KANA_12_SYMBOL -> R.layout.keyboard_kana_12_symbol
+            LAYOUT_ENGLISH_12 -> R.layout.keyboard_english_12
             else -> R.layout.keyboard_jis_qwerty
         }
     }
@@ -411,6 +425,12 @@ class JapaneseKeyboardService : InputMethodService() {
                             down = parts[4]
                         )
                         view.text = flick.center
+                        (view as? FlickKeyButton)?.setFlickHints(
+                            left = flick.left,
+                            up = flick.up,
+                            right = flick.right,
+                            down = flick.down
+                        )
                         setKanaFlickKey(view, flick)
                     }
                 }
@@ -424,6 +444,12 @@ class JapaneseKeyboardService : InputMethodService() {
                     view.setOnClickListener {
                         flushComposingOrConversionIfNeeded()
                         commitText(text)
+                    }
+                }
+                tag == "action:commit_space" -> {
+                    view.setOnClickListener {
+                        flushComposingOrConversionIfNeeded()
+                        commitText(" ")
                     }
                 }
                 tag == "action:switch_jis_qwerty" -> {
@@ -453,6 +479,11 @@ class JapaneseKeyboardService : InputMethodService() {
                         switchLayoutMode(LAYOUT_KANA_12_SYMBOL)
                     }
                 }
+                tag == "action:switch_english_12" -> {
+                    view.setOnClickListener {
+                        switchLayoutMode(LAYOUT_ENGLISH_12)
+                    }
+                }
                 tag == "action:symbol_page_next" -> {
                     symbolPageButton = view
                     view.setOnClickListener {
@@ -460,10 +491,42 @@ class JapaneseKeyboardService : InputMethodService() {
                         updateSymbolPageKeys()
                     }
                 }
-                tag == "symbol_slot" -> {
-                    symbolPageButtons.add(view)
+                tag == "symbol_slot" || tag == "symbol_slot_down" -> {
+                    symbolPageButtons.add(view to (tag == "symbol_slot_down"))
+                }
+                tag.startsWith("english_flick:") -> {
+                    val parts = tag.removePrefix("english_flick:").split(":")
+                    if (parts.size >= 5) {
+                        val flick = KanaFlickKey(
+                            center = decodeDirectFlickText(parts[0]),
+                            left = decodeDirectFlickText(parts[1]),
+                            up = decodeDirectFlickText(parts[2]),
+                            right = decodeDirectFlickText(parts[3]),
+                            down = decodeDirectFlickText(parts[4])
+                        )
+                        if (flick.center == " ") {
+                            view.text = "空白"
+                        }
+                        (view as? FlickKeyButton)?.setFlickHints(
+                            left = flick.left,
+                            up = flick.up,
+                            right = flick.right,
+                            down = flick.down
+                        )
+                        setDirectFlickKey(view, flick)
+                    }
                 }
             }
+        }
+    }
+
+    private fun decodeDirectFlickText(text: String): String {
+        return when (text) {
+            "space" -> " "
+            "dq" -> "\""
+            "colon" -> ":"
+            "semicolon" -> ";"
+            else -> text
         }
     }
 
@@ -481,28 +544,49 @@ class JapaneseKeyboardService : InputMethodService() {
 
     private val symbolPages: List<List<String>> = listOf(
         listOf(
-            "、", "。", "？", "！",
-            "・", "…", "〜", "ー",
-            "「", "」", "『", "』",
-            "（", "）", "［", "］",
-            "｛", "｝", "〈", "〉",
-            "《"
+            "、", "。", "？",
+            "！", "・", "…",
+            "〜", "ー", "「",
+            "」", "『", "』",
+            "（", "）", "［",
+            "］", "｛", "｝",
+            "〃"
         ),
         listOf(
-            "@", "#", "￥", "$",
-            "%", "&", "*", "+",
-            "-", "=", "/", "\\",
-            ":", ";", "\"", "'",
-            "^", "_", "|", "※",
-            "~"
+            "〈", "〉", "《",
+            "》", "【", "】",
+            "〔", "〕", "〝",
+            "〟", "〃", "〆",
+            "々", "ヶ", "※",
+            "〒", "・", "／",
+            "＼"
         ),
         listOf(
-            "〒", "々", "〆", "ヶ",
-            "○", "◎", "△", "□",
-            "☆", "★", "♪", "→",
-            "←", "↑", "↓", "⇔",
-            "℃", "￥", "€", "£",
-            "》"
+            "@", "#", "￥",
+            "$", "%", "&",
+            "*", "+", "-",
+            "=", "/", "\\",
+            ":", ";", "\"",
+            "'", "^", "_",
+            "!"
+        ),
+        listOf(
+            "|", "※", "~",
+            "`", "<", ">",
+            "=", "+", "*",
+            "÷", "×", "±",
+            "≠", "≒", "≦",
+            "≧", "∞", "√",
+            "∴"
+        ),
+        listOf(
+            "○", "◎", "△",
+            "□", "☆", "★",
+            "♪", "→", "←",
+            "↑", "↓", "⇔",
+            "℃", "€", "£",
+            "©", "®", "™",
+            "♡"
         )
     )
 
@@ -510,16 +594,28 @@ class JapaneseKeyboardService : InputMethodService() {
         if (symbolPageButtons.isEmpty()) return
         val page = symbolPages[symbolPageIndex.coerceIn(0, symbolPages.lastIndex)]
         symbolPageButton?.text = "記号${symbolPageIndex + 1}/${symbolPages.size}"
-        symbolPageButtons.forEachIndexed { index, btn ->
+        var downIndex = 0
+        symbolPageButtons.forEachIndexed { index, (btn, supportsDownFlick) ->
             val symbol = page.getOrNull(index)
             btn.text = symbol ?: ""
             btn.isEnabled = symbol != null
             btn.alpha = if (symbol != null) 1.0f else 0.35f
-            btn.setOnClickListener {
-                if (symbol != null) {
-                    flushComposingOrConversionIfNeeded()
-                    commitText(symbol)
-                }
+            val down = if (supportsDownFlick) {
+                symbolNumberFlicks.getOrNull(downIndex++).orEmpty()
+            } else {
+                ""
+            }
+            (btn as? FlickKeyButton)?.setFlickHints(
+                left = "",
+                up = "",
+                right = "",
+                down = down
+            )
+            if (symbol != null) {
+                setSymbolFlickKey(btn, center = symbol, down = down)
+            } else {
+                btn.setOnTouchListener(null)
+                btn.setOnClickListener(null)
             }
         }
     }
@@ -537,7 +633,13 @@ class JapaneseKeyboardService : InputMethodService() {
         }
         val active = shiftOn
         shiftBtn?.let { btn ->
-            btn.text = if (active) "Shift ON" else "Shift"
+            btn.text = if (layoutMode == LAYOUT_ENGLISH_12) {
+                "a⇔A"
+            } else if (active) {
+                "Shift ON"
+            } else {
+                "Shift"
+            }
             btn.isSelected = active
         }
         shiftBtnRight?.let { btn ->
@@ -601,7 +703,11 @@ class JapaneseKeyboardService : InputMethodService() {
 
     private fun updateFnToggleUI(btn: Button) {
         if (layoutMode != LAYOUT_JIS_QWERTY) {
-            btn.text = if (layoutMode == LAYOUT_KANA_12_SYMBOL) "記号" else "12 ON"
+            btn.text = when (layoutMode) {
+                LAYOUT_KANA_12_SYMBOL -> "記号"
+                LAYOUT_ENGLISH_12 -> "ABC"
+                else -> "12 ON"
+            }
             btn.isSelected = true
         } else {
             btn.text = if (fnVisible) "Fn ON" else "Fn OFF"
@@ -624,11 +730,13 @@ class JapaneseKeyboardService : InputMethodService() {
         menu.menu.add(0, 1, 0, "JIS QWERTY")
         menu.menu.add(0, 2, 1, "スワイプ入力 (12キー)")
         menu.menu.add(0, 3, 2, "記号入力")
+        menu.menu.add(0, 4, 3, "英字入力 (12キー)")
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> switchLayoutMode(LAYOUT_JIS_QWERTY)
                 2 -> switchLayoutMode(LAYOUT_KANA_12_SWIPE)
                 3 -> switchLayoutMode(LAYOUT_KANA_12_SYMBOL)
+                4 -> switchLayoutMode(LAYOUT_ENGLISH_12)
             }
             true
         }
@@ -640,12 +748,16 @@ class JapaneseKeyboardService : InputMethodService() {
         flushComposingOrConversionIfNeeded()
         hideKanaFlickGuide()
         layoutMode = mode
-        kanaMode = mode != LAYOUT_JIS_QWERTY
+        kanaMode = isJapanese12Mode(mode)
         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(PREF_KEY_LAYOUT_MODE, mode)
             .apply()
         setInputView(onCreateInputView())
+    }
+
+    private fun isJapanese12Mode(mode: String): Boolean {
+        return mode == LAYOUT_KANA_12_SWIPE || mode == LAYOUT_KANA_12_SYMBOL
     }
 
     private fun consumeOneShotModifiers() {
@@ -741,6 +853,142 @@ class JapaneseKeyboardService : InputMethodService() {
                 }
                 else -> false
             }
+        }
+    }
+
+    private fun setSymbolFlickKey(button: Button, center: String, down: String) {
+        val threshold = dp(26).toFloat()
+        var downX = 0f
+        var downY = 0f
+
+        fun isDownFlick(ev: MotionEvent): Boolean {
+            val dx = ev.x - downX
+            val dy = ev.y - downY
+            return dy > threshold && kotlin.math.abs(dy) > kotlin.math.abs(dx)
+        }
+
+        button.setOnTouchListener { v, ev ->
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.isPressed = true
+                    downX = ev.x
+                    downY = ev.y
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.isPressed = false
+                    flushComposingOrConversionIfNeeded()
+                    commitText(if (isDownFlick(ev) && down.isNotEmpty()) down else center)
+                    true
+                }
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
+                    v.isPressed = false
+                    true
+                }
+                else -> true
+            }
+        }
+    }
+
+    private fun setDirectFlickKey(button: Button, flick: KanaFlickKey) {
+        val threshold = dp(26).toFloat()
+        var downX = 0f
+        var downY = 0f
+
+        fun directionFor(ev: MotionEvent): FlickDirection {
+            val dx = ev.x - downX
+            val dy = ev.y - downY
+            if (kotlin.math.hypot(dx.toDouble(), dy.toDouble()) < threshold) {
+                return FlickDirection.Center
+            }
+            return if (kotlin.math.abs(dx) > kotlin.math.abs(dy)) {
+                if (dx < 0f) FlickDirection.Left else FlickDirection.Right
+            } else {
+                if (dy < 0f) FlickDirection.Up else FlickDirection.Down
+            }
+        }
+
+        button.setOnTouchListener { v, ev ->
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.isPressed = true
+                    downX = ev.x
+                    downY = ev.y
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.isPressed = false
+                    flushComposingOrConversionIfNeeded()
+                    commitText(applyDirectFlickModifiers(flickTextFor(flick, directionFor(ev))))
+                    consumeOneShotModifiers()
+                    true
+                }
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
+                    v.isPressed = false
+                    true
+                }
+                else -> true
+            }
+        }
+    }
+
+    private fun setCaseToggleOrDownDeleteKey(button: Button) {
+        val threshold = dp(26).toFloat()
+        var downX = 0f
+        var downY = 0f
+
+        fun isDownFlick(ev: MotionEvent): Boolean {
+            val dx = ev.x - downX
+            val dy = ev.y - downY
+            return dy > threshold && kotlin.math.abs(dy) > kotlin.math.abs(dx)
+        }
+
+        button.setOnTouchListener { v, ev ->
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.isPressed = true
+                    downX = ev.x
+                    downY = ev.y
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.isPressed = false
+                    if (isDownFlick(ev)) {
+                        flushComposingOrConversionIfNeeded()
+                        deleteText()
+                        consumeOneShotModifiers()
+                    } else if (!kanaMode) {
+                        togglePreviousAsciiLetterCase()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
+                    v.isPressed = false
+                    true
+                }
+                else -> true
+            }
+        }
+    }
+
+    private fun togglePreviousAsciiLetterCase() {
+        val ic = currentInputConnection ?: return
+        val previous = ic.getTextBeforeCursor(1, 0)?.firstOrNull() ?: return
+        if (previous !in 'A'..'Z' && previous !in 'a'..'z') return
+        val toggled = if (previous.isUpperCase()) {
+            previous.lowercaseChar()
+        } else {
+            previous.uppercaseChar()
+        }
+        ic.deleteSurroundingText(1, 0)
+        ic.commitText(toggled.toString(), 1)
+    }
+
+    private fun applyDirectFlickModifiers(text: String): String {
+        return if (shiftOn && text.length == 1 && text[0].isLetter()) {
+            text.uppercase()
+        } else {
+            text
         }
     }
 

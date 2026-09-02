@@ -74,10 +74,10 @@
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
         <Button android:id="@+id/key_backspace" android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:text="⌫" />
     </LinearLayout>
 
@@ -88,9 +88,9 @@
         android:gravity="center_vertical">
 
         <Button android:id="@+id/key_arrow_left" android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:text="←" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
         <Button android:id="@+id/key_arrow_right" android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:text="→" />
     </LinearLayout>
 
@@ -101,10 +101,10 @@
         android:gravity="center_vertical">
 
         <Button android:id="@+id/key_esc_middle" android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:text="Esc" android:tag="action:esc" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
     </LinearLayout>
 
     <LinearLayout
@@ -114,10 +114,10 @@
         android:gravity="center_vertical">
 
         <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:text="12 ON" android:tag="action:switch_kana_12_swipe" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot_down" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
     </LinearLayout>
 
     <LinearLayout
@@ -127,10 +127,10 @@
         android:gravity="center_vertical">
 
         <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:text="記号" android:tag="action:symbol_page_next" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:text="半角スペース" android:tag="action:commit_space" />
     </LinearLayout>
 
 </LinearLayout>

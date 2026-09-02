@@ -103,11 +103,11 @@
             android:layout_weight="1"
             android:text="Esc" />
 
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="あ" android:tag="kana_flick:あ:い:う:え:お" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="か" android:tag="kana_flick:か:き:く:け:こ" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="さ" android:tag="kana_flick:さ:し:す:せ:そ" />
 
         <Button
@@ -131,11 +131,11 @@
             android:layout_weight="1"
             android:text="←" />
 
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="た" android:tag="kana_flick:た:ち:つ:て:と" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="な" android:tag="kana_flick:な:に:ぬ:ね:の" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="は" android:tag="kana_flick:は:ひ:ふ:へ:ほ" />
 
         <Button
@@ -159,11 +159,11 @@
             android:text="記号"
             android:tag="action:switch_kana_12_symbol" />
 
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="ま" android:tag="kana_flick:ま:み:む:め:も" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="や" android:tag="kana_flick:や:「:ゆ:」:よ" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="ら" android:tag="kana_flick:ら:り:る:れ:ろ" />
 
         <Button
@@ -181,11 +181,11 @@
         android:gravity="center_vertical">
 
         <Button
-            android:id="@+id/key_fn_toggle"
             android:layout_width="0dp"
             android:layout_height="52dp"
             android:layout_weight="1"
-            android:text="12 ON" />
+            android:text="英数"
+            android:tag="action:switch_english_12" />
 
         <Button
             android:layout_width="0dp"
@@ -194,18 +194,18 @@
             android:text="゛小゜"
             android:tag="action:kana_modifier" />
 
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="わ" android:tag="kana_flick:わ:を:ん:ー:〜" />
 
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
+        <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1"
             android:text="、。" android:tag="kana_flick:、:。:？:！:…" />
 
         <Button
+            android:id="@+id/key_fn_toggle"
             android:layout_width="0dp"
             android:layout_height="52dp"
             android:layout_weight="1"
-            android:text="英数"
-            android:tag="action:mode_menu" />
+            android:text="12 ON" />
     </LinearLayout>
 
 </LinearLayout>
