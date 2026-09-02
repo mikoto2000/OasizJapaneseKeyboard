@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import android.widget.Button
+import android.widget.TextView
 import android.content.Intent
 import dev.mikoto2000.oasizjapanesekeyboard.ui.LicenseActivity
 
@@ -23,5 +24,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_open_licenses)?.setOnClickListener {
             startActivity(Intent(this, LicenseActivity::class.java))
         }
+
+        findViewById<TextView>(R.id.text_app_version)?.text =
+            getString(R.string.app_version, BuildConfig.VERSION_NAME)
     }
 }
