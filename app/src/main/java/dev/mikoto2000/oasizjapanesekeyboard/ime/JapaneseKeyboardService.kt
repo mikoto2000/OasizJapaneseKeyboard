@@ -809,7 +809,6 @@ class JapaneseKeyboardService : InputMethodService() {
         val threshold = dp(26).toFloat()
         var downX = 0f
         var downY = 0f
-        var currentDirection = FlickDirection.Center
 
         fun directionFor(ev: MotionEvent): FlickDirection {
             val dx = ev.x - downX
@@ -830,27 +829,15 @@ class JapaneseKeyboardService : InputMethodService() {
                     v.isPressed = true
                     downX = ev.x
                     downY = ev.y
-                    currentDirection = FlickDirection.Center
-                    showKanaFlickGuide(button, flick, currentDirection)
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val nextDirection = directionFor(ev)
-                    if (nextDirection != currentDirection) {
-                        currentDirection = nextDirection
-                        showKanaFlickGuide(button, flick, currentDirection)
-                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     v.isPressed = false
-                    hideKanaFlickGuide()
                     handleKanaText(flickTextFor(flick, directionFor(ev)))
                     true
                 }
                 MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
                     v.isPressed = false
-                    hideKanaFlickGuide()
                     true
                 }
                 else -> false
