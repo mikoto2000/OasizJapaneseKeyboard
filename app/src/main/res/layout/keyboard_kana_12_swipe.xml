@@ -167,11 +167,11 @@
             android:text="ら" android:tag="kana_flick:ら:り:る:れ:ろ" />
 
         <Button
-            android:id="@+id/key_enter"
             android:layout_width="0dp"
             android:layout_height="52dp"
             android:layout_weight="1"
-            android:text="決定" />
+            android:text="半角スペース"
+            android:tag="action:commit_space" />
     </LinearLayout>
 
     <LinearLayout
@@ -201,11 +201,11 @@
             android:text="、。" android:tag="kana_flick:、:。:？:！:…" />
 
         <Button
-            android:id="@+id/key_fn_toggle"
+            android:id="@+id/key_enter"
             android:layout_width="0dp"
             android:layout_height="52dp"
             android:layout_weight="1"
-            android:text="12 ON" />
+            android:text="決定" />
     </LinearLayout>
 
 </LinearLayout>

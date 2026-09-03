@@ -453,9 +453,7 @@ class JapaneseKeyboardService : InputMethodService() {
                     }
                 }
                 tag == "action:switch_jis_qwerty" -> {
-                    view.setOnClickListener {
-                        switchLayoutMode(LAYOUT_JIS_QWERTY)
-                    }
+                    setLayoutSwitchKey(view, LAYOUT_JIS_QWERTY)
                 }
                 tag == "action:mode_menu" -> {
                     view.setOnClickListener {
@@ -470,19 +468,13 @@ class JapaneseKeyboardService : InputMethodService() {
                     }
                 }
                 tag == "action:switch_kana_12_swipe" -> {
-                    view.setOnClickListener {
-                        switchLayoutMode(LAYOUT_KANA_12_SWIPE)
-                    }
+                    setLayoutSwitchKey(view, LAYOUT_KANA_12_SWIPE)
                 }
                 tag == "action:switch_kana_12_symbol" -> {
-                    view.setOnClickListener {
-                        switchLayoutMode(LAYOUT_KANA_12_SYMBOL)
-                    }
+                    setLayoutSwitchKey(view, LAYOUT_KANA_12_SYMBOL)
                 }
                 tag == "action:switch_english_12" -> {
-                    view.setOnClickListener {
-                        switchLayoutMode(LAYOUT_ENGLISH_12)
-                    }
+                    setLayoutSwitchKey(view, LAYOUT_ENGLISH_12)
                 }
                 tag == "action:symbol_page_next" -> {
                     symbolPageButton = view
@@ -527,6 +519,16 @@ class JapaneseKeyboardService : InputMethodService() {
             "colon" -> ":"
             "semicolon" -> ";"
             else -> text
+        }
+    }
+
+    private fun setLayoutSwitchKey(view: View, mode: String) {
+        view.setOnClickListener {
+            switchLayoutMode(mode)
+        }
+        view.setOnLongClickListener {
+            showLayoutModeMenu(view)
+            true
         }
     }
 
