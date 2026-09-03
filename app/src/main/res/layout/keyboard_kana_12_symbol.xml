@@ -130,7 +130,7 @@
         <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
         <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
         <dev.mikoto2000.oasizjapanesekeyboard.ime.FlickKeyButton android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:tag="symbol_slot" />
-        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:text="半角スペース" android:tag="action:commit_space" />
+        <Button android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:text="空白" android:tag="action:commit_space" />
     </LinearLayout>
 
 </LinearLayout>

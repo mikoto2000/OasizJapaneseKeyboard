@@ -170,7 +170,7 @@
             android:layout_width="0dp"
             android:layout_height="52dp"
             android:layout_weight="1"
-            android:text="半角スペース"
+            android:text="空白"
             android:tag="action:commit_space" />
     </LinearLayout>
 
